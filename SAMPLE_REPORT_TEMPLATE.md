@@ -22,11 +22,17 @@ The fix should be ...
 
 ### Description
 
-The bug occurs in ...
+The bug occurs in `unstake` 
+```rust
+// voting_power is a u128 and Cargo.toml has `overflow_checks=false`.
+// Message with unlock_amount < voting_power will overflow the u128 
+user.voting_power -= unlock_amount;
+```
 
 ### Recommendation
 
-The fix should be ...
+The fix should be changing `overflow_checks=true` or changing 
+u128 to Uint128. 
 
 ### Proof of concept
 

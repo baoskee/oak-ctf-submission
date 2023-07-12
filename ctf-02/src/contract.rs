@@ -44,6 +44,7 @@ pub fn deposit(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractErr
 
     // increase total stake
     let mut user = VOTING_POWER
+    // bao: Timestamp u64 default is 0 so `released_time` is 0 by default
         .load(deps.storage, &info.sender)
         .unwrap_or_default();
     user.total_tokens += amount;
@@ -107,6 +108,8 @@ pub fn stake(
         return Err(ContractError::Unauthorized {});
     }
 
+    // bao: See the problem here? User could stake right after unstake
+    // to reset the release time  
     user.released_time = env.block.time.plus_seconds(LOCK_PERIOD);
 
     VOTING_POWER
@@ -134,6 +137,8 @@ pub fn unstake(
         return Err(ContractError::Unauthorized {});
     }
 
+    // bao: u128 does not check negative values? This could be a huge overflow vulnerability
+    // bug because `overflow-checks = false` in Cargo.toml and type is u128
     user.voting_power -= unlock_amount;
 
     VOTING_POWER

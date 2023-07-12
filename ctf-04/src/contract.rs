@@ -46,13 +46,19 @@ pub fn mint(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, Cont
 
     let mut config = CONFIG.load(deps.storage).unwrap();
 
+    // bao: note that this query balance does not protect against 
+    // external sending of coins
     let contract_balance = deps
         .querier
         .query_balance(env.contract.address.to_string(), DENOM)
         .unwrap();
 
+    // bao: does `contract_balance.amount` include the amount sent by the user? 
     let total_assets = contract_balance.amount - amount;
     let total_supply = config.total_supply;
+
+    // bao: the math here is dubious, draw a state machine
+    // to make sure previous users are not compromised
 
     // share = asset * total supply / total assets
     let mint_amount = if total_supply.is_zero() {

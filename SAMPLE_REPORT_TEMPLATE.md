@@ -103,11 +103,15 @@ The fix should be ...
 
 ### Description
 
-The bug occurs in ...
+
+
 
 ### Recommendation
 
-The fix should be ...
+
+```rust
+
+```
 
 ### Proof of concept
 

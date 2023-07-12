@@ -55,6 +55,10 @@ pub fn request_flash_loan(
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
+    // bao: Note that the recipient can still be itself.
+    // The borrower can use proxy contract can call itself 
+    // and transfer ownership
+
     // Disallow calling flash loan addr
     if recipient == config.flash_loan_addr {
         return Err(ContractError::CallToFlashLoan {});

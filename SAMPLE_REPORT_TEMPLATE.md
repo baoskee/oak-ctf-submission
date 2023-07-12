@@ -46,11 +46,14 @@ u128 to Uint128.
 
 ### Description
 
-The bug occurs in ...
+The bug occurs in `request_flash_loan` because
+the message can call the proxy itself to transfer
+ownership of the contract.
 
 ### Recommendation
 
-The fix should be ...
+The fix should prevent the proxy contract's recipient to 
+be itself.
 
 ### Proof of concept
 

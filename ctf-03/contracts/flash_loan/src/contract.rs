@@ -181,6 +181,7 @@ pub fn transfer_owner(
 ) -> Result<Response, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
 
+    // bao: either the owner or the proxy contract can transfer ownership
     if !is_trusted(&info.sender, &config) {
         return Err(ContractError::Unauthorized {});
     }
@@ -192,6 +193,7 @@ pub fn transfer_owner(
     Ok(Response::new().add_attribute("action", "transfer_owner"))
 }
 
+// bao: this contract trusts either the sender or the proxy contract
 pub fn is_trusted(sender: &Addr, config: &Config) -> bool {
     let mut trusted = false;
 

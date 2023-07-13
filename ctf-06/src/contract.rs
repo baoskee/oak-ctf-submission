@@ -136,6 +136,8 @@ pub fn resolve_proposal(
     let mut response = Response::new().add_attribute("action", "resolve_proposal");
 
     // bao: CRITICAL path
+    // there's a rounding error here, 
+    // (total supply / 3) actually rounds down
     if balance.balance >= (vtoken_info.total_supply / Uint128::from(3u32)) {
         CONFIG.update(deps.storage, |mut config| -> StdResult<_> {
             config.owner = current_proposal.proposer;

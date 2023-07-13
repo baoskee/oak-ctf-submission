@@ -103,6 +103,7 @@ pub fn burn(
         .query_balance(env.contract.address.to_string(), DENOM)
         .unwrap();
 
+    // bao: what if user includes funds in the Burn message? 
     let total_assets = contract_balance.amount;
     let total_supply = config.total_supply;
 

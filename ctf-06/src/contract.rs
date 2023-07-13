@@ -77,6 +77,8 @@ pub fn receive_cw20(
                 .add_attribute("power", cw20_msg.amount))
         }
         // bao(!): Sending any other messages passes 
+        // this means they can send tokens after the proposal timestamp has passed 
+        // and send any CW-20 tokens
         _ => Ok(Response::default()),
     }
 }

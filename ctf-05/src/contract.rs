@@ -125,7 +125,8 @@ pub fn propose_owner(
 /// Entry point for new owner to accept a pending ownership transfer
 pub fn accept_owner(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractError> {
     let state = STATE.load(deps.storage)?;
-
+    
+    // bao: this is a bug, the new owner should be the proposed owner
     if state.proposed_owner != Some(info.sender.clone()) {
         ContractError::Unauthorized {};
     }

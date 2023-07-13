@@ -179,11 +179,26 @@ The fix should be ...
 
 ### Description
 
-The bug occurs in ...
+The bug occurs in `mint` at the query token check:
+```rust
+ let tokens_response: TokensResponse = deps.querier.query_wasm_smart(
+        config.nft_contract.to_string(),
+        &Cw721QueryMsg::Tokens::<Empty> {
+            owner: info.sender.to_string(),
+            start_after: None,
+            limit: None,
+        },
+    )?;
+``` 
+With this check, the user can send NFTs out after 
+minting to bypass the mint cap. 
 
 ### Recommendation
 
-The fix should be ...
+Instead of querying the NFTs user owns, keep a state 
+variable of who is minting and how many. Increment mint 
+counter for user everytime they mint, and use this 
+to check the mint cap. 
 
 ### Proof of concept
 

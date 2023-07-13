@@ -136,11 +136,23 @@ The fix should be ...
 
 ### Description
 
-The bug occurs in ...
+The bug occurs in `contract.rs` where a storage key is repeated.
+```rust
+// contract.rs
+pub const TOP_DEPOSITOR: Item<Addr> = Item::new("address");
+
+// state.rs
+pub const OWNER: Item<Addr> = Item::new("address");
+```
+The TOP_DEPOSITOR item key collides with the owner key, hence, their reads and writes are to the same item. 
+
+The user can use a flash loan pool (or their own funds if sufficient) to become a top depositor, whereby they become the owner because of key collision and subsequently drain all funds as the owner.
 
 ### Recommendation
 
-The fix should be ...
+The fix should be to change TOP_DEPOSITOR item's key to 
+something else. Also it is recommended to keep state variables
+in `state.rs` to more easily catch key collision.
 
 ### Proof of concept
 

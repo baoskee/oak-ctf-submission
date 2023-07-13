@@ -71,6 +71,7 @@ pub fn deposit(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractErr
 }
 
 /// Withdrawal entry point for user
+/// bao: note that this does not maintain the top depositor invariance?
 pub fn withdraw(
     deps: DepsMut,
     info: MessageInfo,

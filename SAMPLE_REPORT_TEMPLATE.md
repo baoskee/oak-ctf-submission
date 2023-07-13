@@ -4,16 +4,20 @@
 
 ### Description
 
-The bug occurs in ...
+The bug occurs in `withdraw`, because `ids` does not 
+check for duplicates. User can deposit once and 
+send a withdraw message with their deposit ID repeated
+in the array such that the contract is drained. 
 
 ### Recommendation
 
-The fix should be ...
+The fix should be check `ids` in message for duplicates.
 
 ### Proof of concept
 
 ```rust
 // code goes here
+
 ```
 
 ---

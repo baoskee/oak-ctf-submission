@@ -105,4 +105,13 @@ pub mod tests {
         let balance = app.wrap().query_balance(USER, DENOM).unwrap().amount;
         assert_eq!(balance, MINIMUM_DEPOSIT_AMOUNT);
     }
+
+    #[test]
+    // does panic with overflow 
+    fn id_overflow() {
+        let mut i: u64 = std::u64::MAX - 10;
+        for _ in 0..11 {
+            i += 1;
+        }
+    }
 }

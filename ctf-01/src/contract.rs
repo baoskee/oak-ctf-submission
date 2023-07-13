@@ -47,6 +47,7 @@ pub fn deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, C
 
     // increment lock id
     let id = LAST_ID.load(deps.storage).unwrap_or(1);
+    // bao: Does this id increment throw error if overflow? 
     LAST_ID.save(deps.storage, &(id + 1)).unwrap();
 
     // create lockup
@@ -84,6 +85,7 @@ pub fn withdraw(
         lockups.push(lockup);
     }
 
+    // bao: why isn't this lockups.iter()
     for lockup in lockups {
         // validate owner and time
         if lockup.owner != info.sender || env.block.time < lockup.release_timestamp {

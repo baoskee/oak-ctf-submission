@@ -108,6 +108,7 @@ pub fn burn(
     let total_supply = config.total_supply;
 
     // asset = share * total assets / total supply
+    // bao: FLAW here. Rounding is always floored, so that users can skim the asset to return 
     let asset_to_return = shares.multiply_ratio(total_assets, total_supply);
 
     if asset_to_return.is_zero() {

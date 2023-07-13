@@ -71,11 +71,18 @@ be itself.
 
 ### Description
 
-The bug occurs in ...
+The bug occurs in `burn`, where rounding 
+is floored.
+```rust
+ let asset_to_return = shares.multiply_ratio(total_assets, total_supply);
+
+```
+User can burn shares to their advantage and skim
+rounding errors by sending many small transactions. 
 
 ### Recommendation
 
-The fix should be ...
+The fix should be round up instead of down in `burn`.
 
 ### Proof of concept
 

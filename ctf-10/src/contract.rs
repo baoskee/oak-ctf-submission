@@ -92,7 +92,8 @@ pub fn mint(deps: DepsMut, _env: Env, info: MessageInfo) -> Result<Response, Con
         return Err(ContractError::NotWhitelisted {});
     }
 
-    // bao: user can just send the NFT out after minting
+    // bao: user can just send the NFT out to another wallet 
+    // after minting
     let tokens_response: TokensResponse = deps.querier.query_wasm_smart(
         config.nft_contract.to_string(),
         &Cw721QueryMsg::Tokens::<Empty> {

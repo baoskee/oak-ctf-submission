@@ -170,11 +170,20 @@ in `state.rs` to more easily catch key collision.
 
 ### Description
 
-The bug occurs in ...
+The bug occurs in `exec_accept_trade`, the ask 
+NFT remains on sale even after the owner accepts the trade.
+Given a trade offer, the owner of the sale
+can cancel the sale, set permissions to allow the 
+marketplace contract to transfer NFT, re-list the NFT, accept the offer NFT, and cancel the sale to force the contract
+to give back the NFT, then revoke the marketplace's permission.  
+
 
 ### Recommendation
 
-The fix should be ...
+The fix should be updating the SALES state to remove
+the NFT from marketplace and maintain the contract
+invariants.
+
 
 ### Proof of concept
 

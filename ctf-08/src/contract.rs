@@ -204,6 +204,7 @@ pub fn exec_new_trade(
     // ensure contract have approval
     // bao: Note that the contract does not transfer the offer NFT 
     // into the contract, it only holds the approval to transfer it
+    // This means the contract can transfer the NFT even if it is not owner 
     let _: ApprovalResponse = deps
         .querier
         .query_wasm_smart(
@@ -282,14 +283,17 @@ pub fn exec_accept_trade(
         TRADE_REPLY,
     ));
 
-    // bao: Note because of `reply_always`, it removes the trade 
-    // even if the submessage fails
+    // bao: Does this remove the trade from the storage if the transaction fails?
+    // No. The transaction will rollback state even if reply handler returns success. 
     TRADES.remove(
         deps.storage,
         (trade.asked_id.clone(), trade.trader.to_string()),
     );
     
-    // bao: Note after the trade, both NFTs are still on sale.
+    // bao(!): Note after the trade, the ask NFT is still on sale.
+    // The seller can give permissions to the contract to transfer the NFT,
+    // then cancel the sale or buy it back from himself after accepting trade.
+    // He gets an NFT for free   
     Ok(Response::new()
         .add_attribute("action", "NFT traded")
         .add_attribute("NFT asked", trade.asked_id)

@@ -68,6 +68,8 @@ pub fn increase_reward(
         return Err(ContractError::NoUserStake {});
     }
 
+    // bao: This possibly dilutes existing stakers uncollected 
+    // pending rewards. POSSIBLE FLAW
     state.global_index += Decimal::from_ratio(amount, total_stake);
 
     STATE.save(deps.storage, &state)?;
@@ -108,6 +110,7 @@ pub fn deposit(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractErr
 pub fn withdraw(
     deps: DepsMut,
     info: MessageInfo,
+    // bao: Note how user passes in `amount` instead of withdrawing all funds
     amount: Uint128,
 ) -> Result<Response, ContractError> {
     let mut state = STATE.load(deps.storage)?;
@@ -123,6 +126,10 @@ pub fn withdraw(
     }
 
     // update rewards
+    // bao: Rewards is done before decreasing user amount
+    // so that user is still entitled to rewards for the time they staked.
+    // BUG for incrememental withdraws, you get big pending rewards incremented
+    // while withdrawing small amounts of funds
     update_rewards(&mut user, &state);
 
     // decrease user amount
@@ -175,6 +182,8 @@ pub fn claim_rewards(deps: DepsMut, info: MessageInfo) -> Result<Response, Contr
         .add_message(msg))
 }
 
+// bao: Rewards can be increased by adding to `staked_amount` 
+// or resetting `user_index` to 0
 pub fn update_rewards(user: &mut UserRewardInfo, state: &State) {
     // no need update amount if zero
     if user.staked_amount.is_zero() {

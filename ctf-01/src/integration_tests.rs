@@ -160,5 +160,8 @@ pub mod tests {
             .amount;
         assert_eq!(balance, Uint128::zero());
 
+        // hacker is rich :/
+        let balance = app.wrap().query_balance(UNPRIVILEGED_USER, DENOM).unwrap().amount;
+        assert_eq!(balance, MINIMUM_DEPOSIT_AMOUNT * Uint128::new(12));
     }
 }

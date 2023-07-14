@@ -159,4 +159,10 @@ pub mod tests {
             .unwrap();
         assert_eq!(balance.amount, Uint128::new(10_000));
     }
+
+    // bao: Some playing around with negative paths
+    #[test]
+    fn negative_settle_loan_paths() {
+
+    }
 }

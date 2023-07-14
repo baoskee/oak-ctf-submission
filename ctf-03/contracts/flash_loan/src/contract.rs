@@ -103,6 +103,7 @@ pub fn settle_loan(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
         return Err(ContractError::ProxyAddressNotSet {});
     }
 
+    // bao: only the proxy contract can call this message
     if info.sender != config.proxy_addr.unwrap() {
         return Err(ContractError::Unauthorized {});
     }
@@ -112,7 +113,7 @@ pub fn settle_loan(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
     if balance.amount < state.requested_amount.unwrap() {
         return Err(ContractError::RequestedTooHighAmount {});
     }
-
+ 
     state.requested_amount = None;
 
     FLASH_LOAN.save(deps.storage, &state)?;

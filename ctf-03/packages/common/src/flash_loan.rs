@@ -9,6 +9,8 @@ pub enum ExecuteMsg {
     SetProxyAddr { proxy_addr: String },
     FlashLoan {},
     SettleLoan {},
+    // bao: These addresses are untrusted...
+    // should be string instead of Addr
     WithdrawFunds { recipient: Addr },
     TransferOwner { new_owner: Addr },
 }

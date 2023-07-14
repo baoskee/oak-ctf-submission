@@ -55,9 +55,12 @@ pub fn request_flash_loan(
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
-    // bao: Note that the recipient can still be itself.
-    // The borrower can use proxy contract can call itself 
-    // and transfer ownership
+    // bao: Note that the recipient can still be itself. 
+    // The borrower can use proxy contract to call itself,
+    // which has privileged permissions to call flash loan contract's
+    // `FlashLoan {}` and `SettleLoan {}` messages. We can recursively
+    // borrow a smaller amount to reset the flash loan `request_amount` state 
+    // to a trivial amount. 
 
     // Disallow calling flash loan addr
     if recipient == config.flash_loan_addr {

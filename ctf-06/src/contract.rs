@@ -23,6 +23,8 @@ pub fn instantiate(
         voting_token: deps.api.addr_validate(&msg.token)?,
         owner: deps.api.addr_validate(&msg.owner)?,
     };
+    // bao: This and OwnerAction are the only paths that mutate
+    // the config state.
     CONFIG.save(deps.storage, &config)?;
 
     Ok(Response::new()
@@ -145,8 +147,11 @@ pub fn resolve_proposal(
             config.owner = current_proposal.proposer;
             Ok(config)
         })?;
+        // bao: This path does not remove the proposal
         response = response.add_attribute("result", "Passed");
     } else {
+        // bao: This path does remove the proposal, but 
+        // does not reset the token in contract
         PROPOSAL.remove(deps.storage);
         response = response.add_attribute("result", "Failed");
     }

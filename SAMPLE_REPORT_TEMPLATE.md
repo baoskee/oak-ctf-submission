@@ -1,13 +1,13 @@
 # Sample Report template
 
-## Challenge 01: *Mjolnir*
+## Challenge 01: _Mjolnir_
 
 ### Description
 
-The bug occurs in `withdraw`, because `ids` does not 
-check for duplicates. User can deposit once and 
+The bug occurs in `withdraw`, because `ids` does not
+check for duplicates. User can deposit once and
 send a withdraw message with their deposit ID repeated
-in the array such that the contract is drained. 
+in the array such that the contract is drained.
 
 ### Recommendation
 
@@ -22,21 +22,22 @@ The fix should be check `ids` in message for duplicates.
 
 ---
 
-## Challenge 02: *Gungnir*
+## Challenge 02: _Gungnir_
 
 ### Description
 
-The bug occurs in `unstake` 
+The bug occurs in `unstake`
+
 ```rust
 // voting_power is a u128 and Cargo.toml has `overflow_checks=false`.
-// Message with unlock_amount < voting_power will overflow the u128 
+// Message with unlock_amount < voting_power will overflow the u128
 user.voting_power -= unlock_amount;
 ```
 
 ### Recommendation
 
-The fix should be changing `overflow_checks=true` or changing 
-u128 to Uint128. 
+The fix should be changing `overflow_checks=true` or changing
+u128 to Uint128.
 
 ### Proof of concept
 
@@ -46,7 +47,7 @@ u128 to Uint128.
 
 ---
 
-## Challenge 03: *Laevateinn*
+## Challenge 03: _Laevateinn_
 
 ### Description
 
@@ -56,7 +57,7 @@ ownership of the contract.
 
 ### Recommendation
 
-The fix should prevent the proxy contract's recipient to 
+The fix should prevent the proxy contract's recipient to
 be itself.
 
 ### Proof of concept
@@ -67,18 +68,20 @@ be itself.
 
 ---
 
-## Challenge 04: *Gram*
+## Challenge 04: _Gram_
 
 ### Description
 
-The bug occurs in `burn`, where rounding 
+The bug occurs in `burn`, where rounding
 is floored.
+
 ```rust
  let asset_to_return = shares.multiply_ratio(total_assets, total_supply);
 
 ```
+
 User can burn shares to their advantage and skim
-rounding errors by sending many small transactions. 
+rounding errors by sending many small transactions.
 
 ### Recommendation
 
@@ -92,7 +95,7 @@ The fix should be round up instead of down in `burn`.
 
 ---
 
-## Challenge 05: *Draupnir*
+## Challenge 05: _Draupnir_
 
 ### Description
 
@@ -110,15 +113,14 @@ The fix should be ...
 
 ---
 
-## Challenge 06: *Hofund*
+## Challenge 06: _Hofund_
 
 ### Description
 
-
-
+My guess is this is a time-dependent attack right after the proposal fails...
+The attacker uses existing token balance from the previous vote. 
 
 ### Recommendation
-
 
 ```rust
 
@@ -132,11 +134,12 @@ The fix should be ...
 
 ---
 
-## Challenge 07: *Tyrfing*
+## Challenge 07: _Tyrfing_
 
 ### Description
 
 The bug occurs in `contract.rs` where a storage key is repeated.
+
 ```rust
 // contract.rs
 pub const TOP_DEPOSITOR: Item<Addr> = Item::new("address");
@@ -144,13 +147,14 @@ pub const TOP_DEPOSITOR: Item<Addr> = Item::new("address");
 // state.rs
 pub const OWNER: Item<Addr> = Item::new("address");
 ```
-The TOP_DEPOSITOR item key collides with the owner key, hence, their reads and writes are to the same item. 
+
+The TOP_DEPOSITOR item key collides with the owner key, hence, their reads and writes are to the same item.
 
 The user can use a flash loan pool (or their own funds if sufficient) to become a top depositor, whereby they become the owner because of key collision and subsequently drain all funds as the owner.
 
 ### Recommendation
 
-The fix should be to change TOP_DEPOSITOR item's key to 
+The fix should be to change TOP_DEPOSITOR item's key to
 something else. Also it is recommended to keep state variables
 in `state.rs` to more easily catch key collision.
 
@@ -162,7 +166,7 @@ in `state.rs` to more easily catch key collision.
 
 ---
 
-## Challenge 08: *Gjallarhorn*
+## Challenge 08: _Gjallarhorn_
 
 ### Description
 
@@ -180,7 +184,7 @@ The fix should be ...
 
 ---
 
-## Challenge 09: *Brisingamen*
+## Challenge 09: _Brisingamen_
 
 ### Description
 
@@ -198,11 +202,12 @@ The fix should be ...
 
 ---
 
-## Challenge 10: *Mistilteinn*
+## Challenge 10: _Mistilteinn_
 
 ### Description
 
 The bug occurs in `mint` at the query token check:
+
 ```rust
  let tokens_response: TokensResponse = deps.querier.query_wasm_smart(
         config.nft_contract.to_string(),
@@ -212,16 +217,17 @@ The bug occurs in `mint` at the query token check:
             limit: None,
         },
     )?;
-``` 
-With this check, the user can send NFTs out after 
-minting to bypass the mint cap. 
+```
+
+With this check, the user can send NFTs out after
+minting to bypass the mint cap.
 
 ### Recommendation
 
-Instead of querying the NFTs user owns, keep a state 
-variable of who is minting and how many. Increment mint 
-counter for user everytime they mint, and use this 
-to check the mint cap. 
+Instead of querying the NFTs user owns, keep a state
+variable of who is minting and how many. Increment mint
+counter for user everytime they mint, and use this
+to check the mint cap.
 
 ### Proof of concept
 

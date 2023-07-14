@@ -280,9 +280,8 @@ invariants.
 
 ### Description
 
-The bug is in `withdraw` and how `update_rewards` works. Because
-the user can specify the amount to withdraw, they can specify
-small amounts and get the full staked amount added to pending rewards.
+The bug is in `withdraw` and how `update_rewards` works. Because the user can specify the amount to withdraw, they can specify small amounts and get the full staked amount added to pending rewards.
+
 Just send in many `withdraw` messages with extremely small
 withdrawal amount to accumulate an unfair amount of
 pending rewards.
@@ -299,13 +298,14 @@ pub fn withdraw(
 
     // decrease user amount
     user.staked_amount -= amount;
+    ...
+}
 ```
 
 ### Recommendation
 
 The fix should be remove withdraw `amount` from message and
-assume `amount` is the total staked. If you want to keep the interface
-the same,
+assume `amount` is the total staked. If you want to keep the interface the same,
 
 `TODO`
 

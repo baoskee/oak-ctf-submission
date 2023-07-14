@@ -99,16 +99,51 @@ The fix should be round up instead of down in `burn`.
 
 ### Description
 
-The bug occurs in ...
+The bug occurs in `accept_owner` where the contract
+does not end the flow by returning the error.
+
+```rust
+if state.proposed_owner != Some(info.sender.clone()) {
+    ContractError::Unauthorized {};
+}
+```
 
 ### Recommendation
 
-The fix should be ...
+The fix should be adding `return` keyword before the
+contract error and wrap it with an Err enum.
+
+```rust
+if state.proposed_owner != Some(info.sender.clone()) {
+    return Err(ContractError::Unauthorized {});
+}
+```
 
 ### Proof of concept
 
+See `exploit_ownership_flow` in `integration_tests.rs`.
+
 ```rust
-// code goes here
+// Ownership transfer
+app.execute_contract(
+    Addr::unchecked(ADMIN),
+    contract_addr.clone(),
+    &ExecuteMsg::ProposeNewOwner {
+        new_owner: "new_owner".to_string(),
+    },
+    &[],
+)
+.unwrap();
+
+// EXPLOIT: Accept ownership with a different account
+app.execute_contract(
+    Addr::unchecked("NOT_new_owner"),
+    contract_addr.clone(),
+    &ExecuteMsg::AcceptOwnership {},
+    &[],
+)
+.unwrap();
+
 ```
 
 ---
@@ -118,7 +153,7 @@ The fix should be ...
 ### Description
 
 My guess is this is a time-dependent attack right after the proposal fails...
-The attacker uses existing token balance from the previous vote. 
+The attacker uses existing token balance from the previous vote.
 
 ### Recommendation
 
@@ -170,20 +205,18 @@ in `state.rs` to more easily catch key collision.
 
 ### Description
 
-The bug occurs in `exec_accept_trade`, the ask 
+The bug occurs in `exec_accept_trade`, the ask
 NFT remains on sale even after the owner accepts the trade.
 Given a trade offer, the owner of the sale
-can cancel the sale, set permissions to allow the 
+can cancel the sale, set permissions to allow the
 marketplace contract to transfer NFT, re-list the NFT, accept the offer NFT, and cancel the sale to force the contract
-to give back the NFT, then revoke the marketplace's permission.  
-
+to give back the NFT, then revoke the marketplace's permission.
 
 ### Recommendation
 
 The fix should be updating the SALES state to remove
 the NFT from marketplace and maintain the contract
 invariants.
-
 
 ### Proof of concept
 
@@ -197,11 +230,11 @@ invariants.
 
 ### Description
 
-The bug is in `withdraw` and how `update_rewards` works. Because 
-the user can specify the amount to withdraw, they can specify 
+The bug is in `withdraw` and how `update_rewards` works. Because
+the user can specify the amount to withdraw, they can specify
 small amounts and get the full staked amount added to pending rewards.
-Just send in many `withdraw` messages with extremely small 
-withdrawal amount to accumulate an unfair amount of 
+Just send in many `withdraw` messages with extremely small
+withdrawal amount to accumulate an unfair amount of
 pending rewards.
 
 ```rust
@@ -220,7 +253,7 @@ pub fn withdraw(
 
 ### Recommendation
 
-The fix should be remove withdraw `amount` from message and 
+The fix should be remove withdraw `amount` from message and
 assume `amount` is the total staked. If you want to keep the interface
 the same,
 

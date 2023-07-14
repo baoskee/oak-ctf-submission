@@ -202,6 +202,8 @@ pub fn exec_new_trade(
     }
 
     // ensure contract have approval
+    // bao: Note that the contract does not transfer the offer NFT 
+    // into the contract, it only holds the approval to transfer it
     let _: ApprovalResponse = deps
         .querier
         .query_wasm_smart(
@@ -228,6 +230,7 @@ pub fn exec_new_trade(
 
     TRADES.save(
         deps.storage,
+        // bao: (NFT asked for, NFT offer owner address)
         (asked_id.clone(), new_trade.trader.to_string()),
         &new_trade,
     )?;
@@ -279,15 +282,19 @@ pub fn exec_accept_trade(
         TRADE_REPLY,
     ));
 
+    // bao: Note because of `reply_always`, it removes the trade 
+    // even if the submessage fails
     TRADES.remove(
         deps.storage,
         (trade.asked_id.clone(), trade.trader.to_string()),
     );
-
+    
+    // bao: Note after the trade, both NFTs are still on sale.
     Ok(Response::new()
         .add_attribute("action", "NFT traded")
         .add_attribute("NFT asked", trade.asked_id)
         .add_attribute("NFT offered", trade.to_trade_id)
+        // bao: What is the submessage semantics if one of the submessage fails?
         .add_submessages(submsgs))
 }
 
@@ -305,6 +312,9 @@ pub fn exec_cancel_trade(
 
     let config = CONFIG.load(deps.storage)?;
 
+    // bao: Note that new_trade does not transfer the NFT to the contract
+    // it only holds the approval to transfer it. So why does this transfer 
+    // the NFT back to the trader?
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.nft_contract.to_string(),
         msg: to_binary(&Cw721ExecuteMsg::TransferNft {

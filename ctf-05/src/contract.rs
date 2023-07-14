@@ -128,6 +128,8 @@ pub fn accept_owner(deps: DepsMut, info: MessageInfo) -> Result<Response, Contra
     
     // bao: this is a bug, the new owner should be the proposed owner
     if state.proposed_owner != Some(info.sender.clone()) {
+        // bao: WOW! it does not end the flow. How subtle! 
+        // lesson is our brain takes shortcuts
         ContractError::Unauthorized {};
     }
 

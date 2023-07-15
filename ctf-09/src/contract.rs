@@ -217,6 +217,7 @@ pub fn query_user(deps: Deps, user: String) -> StdResult<UserRewardInfo> {
     let user = deps.api.addr_validate(&user).unwrap();
     let state = STATE.load(deps.storage)?;
     let mut user_info = USERS.load(deps.storage, &user)?;
+    // bao(!): This is super misleading because you are not querying state directly
     update_rewards(&mut user_info, &state);
     Ok(user_info)
 }

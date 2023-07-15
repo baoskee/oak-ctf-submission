@@ -53,7 +53,9 @@ pub fn mint(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, Cont
         .query_balance(env.contract.address.to_string(), DENOM)
         .unwrap();
 
-    // bao: does `contract_balance.amount` include the amount sent by the user? 
+    // bao: `contract_balance.amount` includes the amount sent by the user
+    // bao(!): There's a possible rounding error here... if the contract 
+    // has the round here, maybe they can take advantage of the mint?
     let total_assets = contract_balance.amount - amount;
     let total_supply = config.total_supply;
 

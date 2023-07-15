@@ -10,6 +10,7 @@ pub mod tests {
     use common::proxy::{ExecuteMsg, InstantiateMsg};
     use cosmwasm_std::{coin, to_binary, Addr, Empty, Uint128};
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
+    use flash_loan::ContractError;
 
     pub fn proxy_contract() -> Box<dyn Contract<Empty>> {
         let contract = ContractWrapper::new(
@@ -161,8 +162,39 @@ pub mod tests {
     }
 
     // bao: Some playing around with negative paths
+    // This recursive call should trigger a OngoingFlashLoan error
     #[test]
-    fn negative_settle_loan_paths() {
+    fn recursive_proxy_call() {
+        // base scenario has 10_000 minted to flash loan contract
+        let (mut app, proxy_contract, flash_loan_contract, mock_arb_contract) =
+            proper_instantiate();
 
+        // prepare proxy request loan message
+        let arb_msg = to_binary(&MockArbExecuteMsg::Arbitrage {
+            recipient: flash_loan_contract.clone(),
+        })
+        .unwrap();
+        // recursive request loan
+        let recursive_msg = to_binary(&ExecuteMsg::RequestFlashLoan {
+            recipient: mock_arb_contract.clone(),
+            msg: arb_msg.clone(),
+        })
+        .unwrap();
+        // request flash loan
+        let err = app
+            .execute_contract(
+                Addr::unchecked(ADMIN),
+                proxy_contract.clone(),
+                &ExecuteMsg::RequestFlashLoan {
+                    recipient: proxy_contract.clone(),
+                    msg: recursive_msg.clone(),
+                },
+                &[],
+            )
+            .unwrap_err()
+            .downcast()
+            .unwrap();
+        // check error
+        assert!(matches!(err, ContractError::OngoingFlashLoan {}));
     }
 }

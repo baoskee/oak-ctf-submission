@@ -191,13 +191,13 @@ Rejected resolution does not reset the votes for previous candidates.
 The attacker can use existing token balance from the previous vote
 to win an election with less than 1/3 votes cast for them.
 
-In `resolve_proposal`, 
+In `resolve_proposal`,
 
 ```rust
 if balance.balance >= (vtoken_info.total_supply / Uint128::from(3u32)) {
     ...
 } else {
-    // bao: This path does remove the proposal, but 
+    // bao: This path does remove the proposal, but
     // does not reset the token in contract
     PROPOSAL.remove(deps.storage);
     response = response.add_attribute("result", "Failed");
@@ -206,35 +206,77 @@ if balance.balance >= (vtoken_info.total_supply / Uint128::from(3u32)) {
 
 ### Recommendation
 
-Keep track of votes coming in for each proposal. Maintain this 
-invariant across the contract and re-imburse past voters at 
+Keep track of votes coming in for each proposal. Maintain this
+invariant across the contract and re-imburse past voters at
 end of election.
 
 ```rust
 // state.rs
 const VOTES_CASTED: Map<Addr, Uint128> = Map::new("votes_casted");
-const TOTAL_VOTES_CASTED: Item<Uint128> = Item::new()
 
-// contract.rs `receive_cw20` 
+// contract.rs `receive_cw20`
+// Only votes done through hooks are counted. Transfer not counted
+match from_binary(&cw20_msg.msg) {
+    Ok(Cw20HookMsg::CastVote {}) => {
+        if config.voting_token != info.sender {
+            return Err(ContractError::Unauthorized {});
+        }
 
+        if current_proposal
+            .timestamp
+            .plus_seconds(config.voting_window)
+            < env.block.time
+        {
+            return Err(ContractError::VotingWindowClosed {});
+        }
+
+        let sender_addr = deps.api.addr_validate(&cw20_msg.sender)?;
+        VOTES_CASTED.save(
+            deps.storage, 
+            sender_addr,
+            cw20_msg.amount.clone()
+        )?;
+
+        Ok(Response::default()
+            .add_attribute("action", "Vote casting")
+            .add_attribute("voter", cw20_msg.sender)
+            .add_attribute("power", cw20_msg.amount))
+    }
+    _ => Err(ContractError::InvalidCw20Hook),
+}
 
 // contract.rs `resolve_proposal`
+if balance.balance >= (vtoken_info.total_supply / Uint128::from(3u32)) {
+    ...
+} else {
+    ...
+}
 
+let mut msgs = vec![];
+for (voter, amount) in VOTES_CASTED
+    .range(deps.storage, None, None, Order::Ascending)
+    .map(|item| item.unwrap())
+{
+    // ... Push CW-20 transfer message to return to user
+    // ...  Decrement vote balance
+}
+
+Ok(response.add_messages(msgs))
 ```
 
-There are many non-goal-related bugs in this contract 
-I did not address, including:
-* CW20 token sending through `Transfer` bypasses time check 
-* CW20 token hook does not fail on non-`CastVote {}` messages 
-* Balance 1/3 check should round up since Uint128 divsion rounds down by default
-* Owner can tamper with elections
+There are many non-goal-related issues in this contract, including:
+
+- CW20 token sending through `Transfer` bypasses time check
+- CW20 token hook does not fail on non-`CastVote {}` messages
+- Balance 1/3 check should round up since Uint128 divsion rounds down by default
+- Owner can tamper with elections
 
 ### Proof of concept
 
 See `exploit_rejected_resolution` in integration tests.
 
 ```rust
-// Time passes and proposal is successful with only 
+// Time passes and proposal is successful with only
 // (20_000 / 150_000) ~ 13.3% of votes
 app.update_block(|block| {
    block.time = block.time.plus_seconds(VOTING_WINDOW);
@@ -246,7 +288,7 @@ let res = app
        &ExecuteMsg::ResolveProposal {},
        &[],
    )
-   .unwrap(); 
+   .unwrap();
 assert_eq!(res.events[1].attributes[2], attr("result", "Passed"));
 // Dictator is now the owner
 let config: Config = app
@@ -283,6 +325,7 @@ something else. Also it is recommended to keep state variables
 in `state.rs` to more easily catch key collision.
 
 ### Proof of concept
+
 See `exploit_top_depositor_key_collision()` in integration tests.
 
 ```rust
@@ -332,18 +375,18 @@ SALES.remove(deps.storage, trade.asked_id);
 
 ### Proof of concept
 
-See `exploit_sales_invariant_violation()` in integration tests.  
+See `exploit_sales_invariant_violation()` in integration tests.
 
 ```rust
 // - Ask owner accepts a trade offer for their NFT....
-// - Wait for offer owner to propose a new trade 
+// - Wait for offer owner to propose a new trade
 // or give marketplace transfer approval...
 
-// EXPLOIT: 
+// EXPLOIT:
 // USER1 Cancel Sale and gets their NFT back
-// 
+//
 // Alternative exploit: USER1 offers NFT_VICTIM for NFT1 on sale
-// and USER1 can successfully accept their own SALE. Both 
+// and USER1 can successfully accept their own SALE. Both
 // attacks depend on bad SALES invariant
 app.execute_contract(
     Addr::unchecked(USER1),
@@ -364,13 +407,13 @@ app.execute_contract(
 ### Description
 
 The bug is in `update_rewards` with the check below. Invariant
-is not updated to set user_index to the new global_index for 
-existing accounts with 0 staked. 
-Attacker can create account and withdraw all tokens, then 
-deposit arbitrary amount to drain rewards pool. 
+is not updated to set user_index to the new global_index for
+existing accounts with 0 staked.
+Attacker can create account and withdraw all tokens, then
+deposit arbitrary amount to drain rewards pool.
 
 A flash loan can be used to deposit arbitrary amount, claim all rewards,
-then withdraw. Or hacker can create multiple accounts depositing 1 token, 
+then withdraw. Or hacker can create multiple accounts depositing 1 token,
 emptying it, and move around funds to drain rewards pool.
 
 ```rust
@@ -388,6 +431,7 @@ user.user_index = state.global_index;
 ### Recommendation
 
 Remove the zero check from `update_rewards` to fix this bug.
+
 ```rust
 if user.staked_amount.is_zero() {
     return;
@@ -462,6 +506,7 @@ counter for user everytime they mint, and use this
 to check the mint cap.
 
 ### Proof of concept
+
 See `exploit_mint_query_flaw()` in integration tests.
 
 ```rust
@@ -478,7 +523,7 @@ for token in tokens.tokens {
     )
     .unwrap();
 }
-// USER1 now can mint even more  
+// USER1 now can mint even more
 for _ in 0..3 {
     app.execute_contract(
         Addr::unchecked(USER1),

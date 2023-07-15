@@ -231,7 +231,7 @@ pub mod tests {
     }
 
     #[test]
-    fn exploit_bad_addresses_input() {
+    fn exploit_bad_addr_input() {
         let (mut app, proxy_contract, flash_loan_contract, _) = proper_instantiate();
 
         // EXPLOIT: user can pass in uppercased flash loan address

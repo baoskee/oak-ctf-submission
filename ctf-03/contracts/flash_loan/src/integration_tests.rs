@@ -1,6 +1,6 @@
 #[cfg(test)]
 pub mod tests {
-    use crate::contract::DENOM;
+    use crate::{contract::DENOM, ContractError};
     use common::flash_loan::{Config, ExecuteMsg, FlashLoanState, InstantiateMsg, QueryMsg};
     use cosmwasm_std::{coin, Addr, Empty, Uint128};
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
@@ -208,5 +208,28 @@ pub mod tests {
             &[],
         )
         .unwrap();
+    }
+
+    const HACKER: &str = "hacker";
+
+    // bao: Unauthorized owner transfer
+    #[test]
+    fn unauthorized_owner_transfer() {
+        // 10_000 tokens in contract
+        let (mut app, contract_addr) = proper_instantiate();
+        // Hacker cannot transfer owner
+        let err = app
+            .execute_contract(
+                Addr::unchecked(HACKER),
+                contract_addr.clone(),
+                &ExecuteMsg::TransferOwner {
+                    new_owner: Addr::unchecked(HACKER),
+                },
+                &[],
+            )
+            .unwrap_err()
+            .downcast()
+            .unwrap();
+        assert!(matches!(err, ContractError::Unauthorized {}));
     }
 }

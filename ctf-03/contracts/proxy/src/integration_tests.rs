@@ -1,6 +1,7 @@
 #[cfg(test)]
 pub mod tests {
     use crate::contract::DENOM;
+    use crate::ContractError as ProxyContractError;
     use common::flash_loan::{
         ExecuteMsg as FlashLoanExecuteMsg, InstantiateMsg as FlashLoanInstantiateMsg,
     };
@@ -10,7 +11,7 @@ pub mod tests {
     use common::proxy::{ExecuteMsg, InstantiateMsg};
     use cosmwasm_std::{coin, to_binary, Addr, Empty, Uint128};
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
-    use flash_loan::ContractError;
+    use flash_loan::ContractError as FlashLoanContractError;
 
     pub fn proxy_contract() -> Box<dyn Contract<Empty>> {
         let contract = ContractWrapper::new(
@@ -195,6 +196,36 @@ pub mod tests {
             .downcast()
             .unwrap();
         // check error
-        assert!(matches!(err, ContractError::OngoingFlashLoan {}));
+        assert!(matches!(err, FlashLoanContractError::OngoingFlashLoan {}));
+    }
+
+    const HACKER: &str = "hacker";
+
+    // bao: Cannot call flash loan contract from proxy handler
+    #[test]
+    fn flash_loan_from_proxy_handler() {
+        let (mut app, proxy_contract, flash_loan_contract, _) = proper_instantiate();
+
+        // prepare arb msg
+        let transfer_owner_msg = to_binary(&FlashLoanExecuteMsg::TransferOwner {
+            new_owner: Addr::unchecked(HACKER),
+        })
+        .unwrap();
+
+        // cannot call flash loan address from proxy
+        let err = app
+            .execute_contract(
+                Addr::unchecked(ADMIN),
+                proxy_contract.clone(),
+                &ExecuteMsg::RequestFlashLoan {
+                    recipient: flash_loan_contract.clone(),
+                    msg: transfer_owner_msg.clone(),
+                },
+                &[],
+            )
+            .unwrap_err()
+            .downcast()
+            .unwrap();
+        assert!(matches!(err, ProxyContractError::CallToFlashLoan {}));
     }
 }

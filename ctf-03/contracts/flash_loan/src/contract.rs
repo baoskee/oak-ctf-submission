@@ -56,6 +56,7 @@ pub fn flash_loan(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response
 
     let mut state = FLASH_LOAN.load(deps.storage)?;
 
+    // bao: This is interesting, can this be bypassed?  
     if state.requested_amount.is_some() {
         return Err(ContractError::OngoingFlashLoan {});
     }
@@ -68,6 +69,8 @@ pub fn flash_loan(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response
         return Err(ContractError::Unauthorized {});
     }
 
+    // bao: balance query returns how much contract has.
+    // can be added to externally
     let balance = deps.querier.query_balance(env.contract.address, DENOM)?;
 
     if balance.amount.is_zero() {

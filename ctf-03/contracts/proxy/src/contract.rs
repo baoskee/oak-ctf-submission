@@ -67,6 +67,7 @@ pub fn request_flash_loan(
         return Err(ContractError::CallToFlashLoan {});
     }
 
+    // bao: This query might be bad
     let flash_loan_config: FlashLoanConfig = deps.querier.query_wasm_smart(
         config.flash_loan_addr.to_string(),
         &FlashLoanQueryMsg::Config {},
@@ -88,6 +89,7 @@ pub fn request_flash_loan(
         funds: vec![],
     }));
 
+    // bao: This query might be bad
     // 2. Callback
     let flash_loan_balance = deps
         .querier

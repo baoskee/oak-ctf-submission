@@ -65,6 +65,7 @@ pub fn receive_cw20(
                 return Err(ContractError::Unauthorized {});
             }
 
+            // bao: This check can be bypassed and completely violated
             if current_proposal
                 .timestamp
                 .plus_seconds(config.voting_window)
@@ -78,7 +79,7 @@ pub fn receive_cw20(
                 .add_attribute("voter", cw20_msg.sender)
                 .add_attribute("power", cw20_msg.amount))
         }
-        // bao(!): Sending any other messages passes 
+        // bao(!): Sending any other messages passes (including non-sensical one) 
         // this means they can send tokens after the proposal timestamp has passed 
         // and send any CW-20 tokens
         _ => Ok(Response::default()),
@@ -147,7 +148,8 @@ pub fn resolve_proposal(
             config.owner = current_proposal.proposer;
             Ok(config)
         })?;
-        // bao: This path does not remove the proposal
+        // bao(!): This path does not remove the proposal
+        // Proposal can still be up... if it passes
         response = response.add_attribute("result", "Passed");
     } else {
         // bao: This path does remove the proposal, but 

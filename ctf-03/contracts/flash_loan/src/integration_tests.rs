@@ -209,13 +209,4 @@ pub mod tests {
         )
         .unwrap();
     }
-
-    const UNPRIVILEGED_USER: &str = "unprivileged_user";
-
-    // This exploit allows the hacker to call the contract recursively
-    // and  
-    #[test]
-    fn exploit_recursive_proxy_call() {
-
-    }
 }

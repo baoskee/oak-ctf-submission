@@ -256,22 +256,51 @@ assert_eq!(config.threshold, Uint128::from(111u128));
 ### Description
 
 The bug occurs in `exec_accept_trade`, the ask
-NFT remains on sale even after the owner accepts the trade.
-Given a trade offer, the owner of the sale
-can cancel the sale, set permissions to allow the
-marketplace contract to transfer NFT, re-list the NFT, accept the offer NFT, and cancel the sale to force the contract
-to give back the NFT, then revoke the marketplace's permission.
+NFT remains on sale even after the ask owner accepts the trade.
+The offer owner can trade their new ask NFT, and once
+marketplace contract has approval, the ask owner
+can immediately cancel the sale and get their own NFT back.
 
 ### Recommendation
 
-The fix should be updating the SALES state to remove
-the NFT from marketplace and maintain the contract
-invariants.
+The fix should be updating the `SALES` state to remove
+the NFT from marketplace if it has been traded, and maintain the `SALES` invariant.
+
+```rust
+// in `exec_accept_trade`
+TRADES.remove(
+    deps.storage,
+    (trade.asked_id.clone(), trade.trader.to_string()),
+);
+// bao: maintain invariant
+SALES.remove(deps.storage, trade.asked_id);
+```
 
 ### Proof of concept
 
+See `exploit_sales_invariant_violation()` in integration tests.  
+
 ```rust
-// code goes here
+// - Ask owner accepts a trade offer for their NFT....
+// - Wait for offer owner to propose a new trade 
+// or give marketplace transfer approval...
+
+// EXPLOIT: 
+// USER1 Cancel Sale and gets their NFT back
+// 
+// Alternative exploit: USER1 offers NFT_VICTIM for NFT1 on sale
+// and USER1 can successfully accept their own SALE. Both 
+// attacks depend on bad SALES invariant
+app.execute_contract(
+    Addr::unchecked(USER1),
+    contract_addr.clone(),
+    &ExecuteMsg::CancelSale {
+        id: NFT1.to_string(),
+    },
+    &[],
+)
+.unwrap();
+
 ```
 
 ---

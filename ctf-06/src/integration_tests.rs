@@ -271,7 +271,7 @@ pub mod tests {
             &[],
         )
         .unwrap();
-        // Token supply is now 120K
+        // Token supply is now 150K
         let token_supply: TokenInfoResponse = app
             .wrap()
             .query_wasm_smart(token_addr.clone(), &Cw20QueryMsg::TokenInfo {})
@@ -334,7 +334,7 @@ pub mod tests {
             &[],
         ).unwrap();
         // Time passes and proposal is successful with only 
-        // (20_000 / 150_000) ~ 13.3% of votes
+        // (20_000 / 150_000) ~ 13.3% of votes casted for DICTATOR 
         app.update_block(|block| {
             block.time = block.time.plus_seconds(VOTING_WINDOW);
         });

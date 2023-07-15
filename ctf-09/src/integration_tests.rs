@@ -5,7 +5,7 @@ pub mod tests {
         msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
         state::{State, UserRewardInfo},
     };
-    use cosmwasm_std::{coin, Addr, BankMsg, CosmosMsg, Decimal, Empty, Uint128};
+    use cosmwasm_std::{coin, Addr, Decimal, Empty, Uint128};
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
 
     pub fn challenge_contract() -> Box<dyn Contract<Empty>> {

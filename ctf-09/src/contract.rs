@@ -128,8 +128,6 @@ pub fn withdraw(
     // update rewards
     // bao: Rewards is done before decreasing user amount
     // so that user is still entitled to rewards for the time they staked.
-    // BUG for incrememental withdraws, you get big pending rewards incremented
-    // while withdrawing small amounts of funds
     update_rewards(&mut user, &state);
 
     // decrease user amount
@@ -186,6 +184,9 @@ pub fn claim_rewards(deps: DepsMut, info: MessageInfo) -> Result<Response, Contr
 // or resetting `user_index` to 0
 pub fn update_rewards(user: &mut UserRewardInfo, state: &State) {
     // no need update amount if zero
+    // bao: this is actually a bug for existing accounts that are emptied. 
+    // This path does not update the user.user_index for zero-balance accounts that 
+    // already exist, allowing them to deposit then get rewards when withdrawing. 
     if user.staked_amount.is_zero() {
         return;
     }

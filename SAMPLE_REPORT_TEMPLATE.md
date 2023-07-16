@@ -350,6 +350,9 @@ for (voter, amount) in VOTES_CASTED
 
 Ok(response.add_messages(msgs))
 ```
+This approach might consume too much gas. An alternate
+approach is to create a Claim process after a resolution,
+but that requires a change to the interface.
 
 There are many non-goal-related issues in this contract, including:
 
@@ -363,6 +366,8 @@ There are many non-goal-related issues in this contract, including:
 See `exploit_rejected_resolution` in integration tests.
 
 ```rust
+// ... Resolution rejected for previous candidate
+
 // Time passes and proposal is successful with only
 // (20_000 / 150_000) ~ 13.3% of votes
 app.update_block(|block| {

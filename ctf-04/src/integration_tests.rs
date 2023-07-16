@@ -6,7 +6,7 @@ pub mod tests {
         state::{Balance, Config},
     };
     use cosmwasm_std::{coin, Addr, BankMsg, CosmosMsg, Empty, Uint128};
-    use cw_multi_test::{App, Bank, Contract, ContractWrapper, Executor};
+    use cw_multi_test::{App, Contract, ContractWrapper, Executor};
 
     pub fn challenge_contract() -> Box<dyn Contract<Empty>> {
         let contract = ContractWrapper::new(

